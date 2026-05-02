@@ -1,5 +1,33 @@
 # Faculty Library Management System (FLMS)
-![FLMS Banner](assets/banner.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 232245.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 232305.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235556.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235625.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235643.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235656.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235707.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235723.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235737.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235815.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235900.png)
+
+![FLMS Banner](assets/Screenshot 2026-05-02 235912.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235922.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235932.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235941.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235950.png)
+![FLMS Banner](assets/Screenshot 2026-05-02 235959.png)
+![FLMS Banner](assets/Screenshot 2026-05-03 000039.png)
+
+![FLMS Banner](assets/Screenshot 2026-05-03 000049.png)
+![FLMS Banner](assets/Screenshot 2026-05-03 000059.png)
+![FLMS Banner](assets/Screenshot 2026-05-03 000108.png)
+![FLMS Banner](assets/Screenshot 2026-05-03 000119.png)
+![FLMS Banner](assets/Screenshot 2026-05-03 000132.png)
+![FLMS Banner](assets/Screenshot 2026-05-03 000141.png)
+![FLMS Banner](assets/Screenshot 2026-05-03 000152.png)
+
+
 A full-stack web application for managing a university library — built with React, Express 5, PostgreSQL, and Drizzle ORM. Supports four user roles with a complete set of borrowing, cataloguing, and administrative features.
 
 This a temporary link its expired when my replit session closed ::
