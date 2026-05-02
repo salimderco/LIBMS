@@ -32,7 +32,15 @@ export default function ReportsPage() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(setSummary)
+      .then(data => setSummary({
+        ...data,
+        totalOutstandingFines: Number(data.totalOutstandingFines),
+        totalBooks: Number(data.totalBooks),
+        totalUsers: Number(data.totalUsers),
+        activeLoans: Number(data.activeLoans),
+        overdueLoans: Number(data.overdueLoans),
+        totalReturned: Number(data.totalReturned),
+      }))
       .catch(() => toast.error("Failed to load summary"))
       .finally(() => setLoading(false));
   }, []);
@@ -67,7 +75,7 @@ export default function ReportsPage() {
     { label: t.reports.activeLoans, value: summary?.activeLoans, icon: ClipboardList, color: "text-amber-600" },
     { label: t.reports.overdueLoans, value: summary?.overdueLoans, icon: AlertTriangle, color: "text-destructive" },
     { label: t.reports.totalReturned, value: summary?.totalReturned, icon: CheckCircle, color: "text-green-600" },
-    { label: t.reports.outstandingFines, value: summary ? `$${summary.totalOutstandingFines.toFixed(2)}` : undefined, icon: DollarSign, color: "text-red-500" },
+    { label: t.reports.outstandingFines, value: summary ? `$${Number(summary.totalOutstandingFines).toFixed(2)}` : undefined, icon: DollarSign, color: "text-red-500" },
   ];
 
   const exports = [

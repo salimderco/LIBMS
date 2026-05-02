@@ -34,7 +34,19 @@ export default function LoanPolicyPage() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(data => { setPolicy(data); setForm(data); })
+      .then(data => {
+        const normalized = {
+          ...data,
+          studentLoanDays: Number(data.studentLoanDays),
+          facultyLoanDays: Number(data.facultyLoanDays),
+          studentQuota: Number(data.studentQuota),
+          facultyQuota: Number(data.facultyQuota),
+          maxRenewals: Number(data.maxRenewals),
+          fineRatePerDay: Number(data.fineRatePerDay),
+        };
+        setPolicy(normalized);
+        setForm(normalized);
+      })
       .catch(() => toast.error("Failed to load policy"))
       .finally(() => setLoading(false));
   }, []);
@@ -48,7 +60,16 @@ export default function LoanPolicyPage() {
         body: JSON.stringify(form),
       });
       if (!resp.ok) throw new Error("Save failed");
-      const updated = await resp.json();
+      const raw = await resp.json();
+      const updated = {
+        ...raw,
+        studentLoanDays: Number(raw.studentLoanDays),
+        facultyLoanDays: Number(raw.facultyLoanDays),
+        studentQuota: Number(raw.studentQuota),
+        facultyQuota: Number(raw.facultyQuota),
+        maxRenewals: Number(raw.maxRenewals),
+        fineRatePerDay: Number(raw.fineRatePerDay),
+      };
       setPolicy(updated);
       setForm(updated);
       toast.success(t.loanPolicy.saved, { description: "Loan policy updated successfully." });
