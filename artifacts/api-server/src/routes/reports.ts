@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { loansTable, booksTable, usersTable, reviewsTable } from "@workspace/db";
-import { eq, and, count, avg, gte, sql, desc } from "drizzle-orm";
+import { eq, and, count, avg, gte, sql, desc, isNull, isNotNull } from "drizzle-orm";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate.js";
 import { computeFineAmount } from "./loans.js";
 
@@ -16,7 +16,7 @@ router.get("/reports/summary", authenticate as any, requireRole("LIBRARIAN", "AD
   const [{ totalBooks }] = await db.select({ totalBooks: count() }).from(booksTable);
   const [{ totalUsers }] = await db.select({ totalUsers: count() }).from(usersTable);
 
-  const allActive = await db.select().from(loansTable).where(eq(loansTable.returnedAt, null as any));
+  const allActive = await db.select().from(loansTable).where(isNull(loansTable.returnedAt));
   const now = new Date();
   const activeLoans = allActive.filter(l => l.dueDate >= now).length;
   const overdueLoans = allActive.filter(l => l.dueDate < now).length;
@@ -26,7 +26,7 @@ router.get("/reports/summary", authenticate as any, requireRole("LIBRARIAN", "AD
   const [{ totalReturned }] = await db
     .select({ totalReturned: count() })
     .from(loansTable)
-    .where(sql`${loansTable.returnedAt} IS NOT NULL`);
+    .where(isNotNull(loansTable.returnedAt));
 
   const popularRows = await db
     .select({ bookId: loansTable.bookId, borrowCount: count(loansTable.id) })
@@ -81,7 +81,7 @@ router.get("/reports/loans-csv", authenticate as any, requireRole("LIBRARIAN", "
 });
 
 router.get("/reports/overdue-csv", authenticate as any, requireRole("LIBRARIAN", "ADMIN") as any, async (_req, res) => {
-  const all = await db.select().from(loansTable).where(eq(loansTable.returnedAt, null as any));
+  const all = await db.select().from(loansTable).where(isNull(loansTable.returnedAt));
   const now = new Date();
   const overdue = all.filter(l => l.dueDate < now);
 

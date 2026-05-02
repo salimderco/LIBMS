@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { loansTable, booksTable, usersTable, activityLogsTable } from "@workspace/db";
-import { eq, count, gte, sql, desc } from "drizzle-orm";
+import { eq, count, gte, sql, desc, isNull } from "drizzle-orm";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate.js";
 
 const router = Router();
@@ -16,7 +16,7 @@ router.get("/dashboard/summary", authenticate as any, async (req: AuthRequest, r
   const [{ totalBooks }] = await db.select({ totalBooks: count() }).from(booksTable);
   const [{ totalUsers }] = await db.select({ totalUsers: count() }).from(usersTable);
 
-  const allActiveLoans = await db.select().from(loansTable).where(eq(loansTable.returnedAt, null as any));
+  const allActiveLoans = await db.select().from(loansTable).where(isNull(loansTable.returnedAt));
   const now = new Date();
   const activeLoans = allActiveLoans.filter(l => l.dueDate >= now).length;
   const overdueLoans = allActiveLoans.filter(l => l.dueDate < now).length;
@@ -43,7 +43,7 @@ router.get("/dashboard/summary", authenticate as any, async (req: AuthRequest, r
 });
 
 router.get("/dashboard/overdue", authenticate as any, requireRole("LIBRARIAN", "ADMIN") as any, async (_req, res) => {
-  const all = await db.select().from(loansTable).where(eq(loansTable.returnedAt, null as any));
+  const all = await db.select().from(loansTable).where(isNull(loansTable.returnedAt));
   const now = new Date();
   const overdue = all.filter(l => l.dueDate < now);
 
@@ -96,7 +96,7 @@ router.get("/dashboard/popular-books", authenticate as any, async (req, res) => 
 });
 
 router.get("/dashboard/recent-activity", authenticate as any, requireRole("LIBRARIAN", "ADMIN") as any, async (req, res) => {
-  const limit = Math.min(50, parseInt(req.query.limit as string) || 10);
+  const limit = Math.min(500, parseInt(req.query.limit as string) || 10);
 
   const logs = await db
     .select()
