@@ -1,35 +1,6 @@
 # Faculty Library Management System (FLMS)
 # Faculty Library Management System (FLMS)
 
-![FLMS Banner](<assets/Screenshot 2026-05-02 232245.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 232305.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235556.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235625.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235643.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235656.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235707.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235723.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235737.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235815.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235900.png>)
-
-![FLMS Banner](<assets/Screenshot 2026-05-02 235912.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235922.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235932.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235941.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235950.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-02 235959.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-03 000039.png>)
-
-![FLMS Banner](<assets/Screenshot 2026-05-03 000049.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-03 000059.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-03 000108.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-03 000119.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-03 000132.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-03 000141.png>)
-![FLMS Banner](<assets/Screenshot 2026-05-03 000152.png>)
-
-
 A full-stack web application for managing a university library — built with React, Express 5, PostgreSQL, and Drizzle ORM. Supports four user roles with a complete set of borrowing, cataloguing, and administrative features.
 
 This a temporary link its expired when my replit session closed ::
@@ -49,7 +20,58 @@ https://0dc70a19-762e-4901-83af-2705064168f1-00-1knoi5wrpclpj.riker.replit.dev
 - [Environment Variables](#environment-variables)
 
 ---
+## Visual Walkthrough
 
+<details>
+<summary><b>📸 Click to expand: Dashboard & Catalog (4 Screenshots)</b></summary>
+<br>
+
+| | |
+|:---:|:---:|
+| ![FLMS Dashboard](<assets/Screenshot 2026-05-02 232245.png>) | ![Book Search](<assets/Screenshot 2026-05-02 232305.png>) |
+| ![Catalog Grid](<assets/Screenshot 2026-05-02 235556.png>) | ![Detailed Book](<assets/Screenshot 2026-05-02 235625.png>) |
+
+</details>
+
+<details>
+<summary><b>📚 Click to expand: Borrowing, Reservations & Reviews (6 Screenshots)</b></summary>
+<br>
+
+| | |
+|:---:|:---:|
+| ![Borrow Book](<assets/Screenshot 2026-05-02 235643.png>) | ![Loan Renewal](<assets/Screenshot 2026-05-02 235656.png>) |
+| ![Return Process](<assets/Screenshot 2026-05-02 235707.png>) | ![Hold Queue](<assets/Screenshot 2026-05-02 235723.png>) |
+| ![Ratings Reviews](<assets/Screenshot 2026-05-02 235737.png>) | ![My Wishlist](<assets/Screenshot 2026-05-02 235815.png>) |
+
+</details>
+
+<details>
+<summary><b>⚙️ Click to expand: Management & Admin Panel (7 Screenshots)</b></summary>
+<br>
+
+| | |
+|:---:|:---:|
+| ![Fines Billing](<assets/Screenshot 2026-05-02 235900.png>) | ![Announcements](<assets/Screenshot 2026-05-02 235912.png>) |
+| ![Audit Logs](<assets/Screenshot 2026-05-02 235922.png>) | ![CSV Reports](<assets/Screenshot 2026-05-02 235932.png>) |
+| ![Loan Policy](<assets/Screenshot 2026-05-02 235941.png>) | ![Catalog Mgmt](<assets/Screenshot 2026-05-02 235950.png>) |
+| ![User Management](<assets/Screenshot 2026-05-02 235959.png>) | |
+
+</details>
+
+<details>
+<summary><b>✨ Click to expand: Accessibility, Dark Mode & RTL Support (8 Screenshots)</b></summary>
+<br>
+
+| | |
+|:---:|:---:|
+| ![AI Recommendations](<assets/Screenshot 2026-05-03 000039.png>) | ![Dark Mode](<assets/Screenshot 2026-05-03 000049.png>) |
+| ![Arabic RTL Layout](<assets/Screenshot 2026-05-03 000059.png>) | ![Notifications Hub](<assets/Screenshot 2026-05-03 000108.png>) |
+| ![Due-Soon Alerts](<assets/Screenshot 2026-05-03 000119.png>) | ![System Search](<assets/Screenshot 2026-05-03 000132.png>) |
+| ![Analytics Charts](<assets/Screenshot 2026-05-03 000141.png>) | ![Mobile View](<assets/Screenshot 2026-05-03 000152.png>) |
+
+</details>
+
+---
 ## Features
 
 | # | Feature | Roles |
