@@ -1,8 +1,10 @@
 import express, { type Express } from "express";
 import cors from "cors";
-import pinoHttp from "pino-http";
+// Changed to a default import to fix the callable expression error
+import pinoHttp from "pino-http"; 
 import router from "./routes";
 import { logger } from "./lib/logger";
+import type { IncomingMessage, ServerResponse } from "http";
 
 const app: Express = express();
 
@@ -10,14 +12,16 @@ app.use(
   pinoHttp({
     logger,
     serializers: {
-      req(req) {
+      // Explicitly typed 'req' to fix the implicit 'any' error
+      req(req: IncomingMessage & { id?: string | number }) {
         return {
           id: req.id,
           method: req.method,
           url: req.url?.split("?")[0],
         };
       },
-      res(res) {
+      // Explicitly typed 'res' to fix the implicit 'any' error
+      res(res: ServerResponse) {
         return {
           statusCode: res.statusCode,
         };
@@ -25,6 +29,7 @@ app.use(
     },
   }),
 );
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
