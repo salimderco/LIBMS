@@ -1,0 +1,54 @@
+Act as an expert Full-Stack Software Engineer, UI/UX Designer, and AI Developer. Build a high-end, production-ready, and modern Faculty Library Management System (FLMS) using TypeScript, Next.js 14+ (App Router), Tailwind CSS, Shadcn UI, and Prisma ORM with SQLite.
+
+The app must load cleanly with no runtime errors. Ensure that `next-themes` or duplicate React instances are completely avoided, using a simple global CSS or Tailwind configuration for styling, and use the standard Sonner toaster directly without theme wrappers.
+
+Follow these strict project rules, functional requirements, and testing criteria:
+
+### 1. Authentication, Sessions & Route Protection
+- Provide an email/password login returning a JWT-based session.
+- Register form: accepts full name, email, password, role (Student, Faculty, Librarian, Admin), and department.
+- Store passwords securely using a hashing algorithm (bcrypt or argon2). Plaintext passwords must never be stored or logged.
+- All protected pages must redirect unauthenticated users back to the Login page. 
+- Role-based server-side protection: Use Next.js Middleware or server actions to restrict unauthorized roles from fetching private data or loading admin routes (e.g., /users). 
+- Server-Side Token Invalidation: When a user logs out, fully revoke and invalidate their session/token server-side.
+- Supported Demo Accounts (All passwords: "password123"):
+  * Student: alice@university.edu
+  * Faculty: david.chen@university.edu
+  * Librarian: sarah@library.edu
+  * Admin: admin@university.edu
+- Deactivated accounts must be strictly blocked from logging in.
+
+### 2. Built-In Free AI Integration & Fallback
+- Install `ai` and `@ai-sdk/google`. Use the `GEMINI_API_KEY` environment variable with the free-tier `gemini-2.5-flash` or `gemini-2.5-flash-lite` models.
+- All AI features must be safely wrapped in try/catch blocks. If no key is configured, return mock/fallback data and display a helpful toast notification rather than crashing.
+- AI Feature 1: 'Smart Book Enrichment' on the Catalog Management page. Include an "Auto-Fill with AI" button that reads the Title and Author, then returns a JSON object containing a professional description, tags, valid ISBN, publisher, and year.
+- AI Feature 2: 'AI Smart Suggestions' on the Catalog page. It analyzes the user's past borrowing history and suggests 3 relevant books from the available library inventory.
+
+### 3. Core Pages & UI Requirements
+- High-end visual design: Use a dynamic, modern Zinc/Emerald or Slate/Teal palette with explicit loading skeletons, interactive hover effects using Tailwind, and responsive desktop/mobile navigation. 
+- / (Dashboard): Displays role-specific stat cards.
+  * Students/Faculty see: My Active Loans, My Overdue, Books Available, Total in Catalog.
+  * Librarians/Admins see: Total Books, Total Users, Active Loans, Overdue count. Includes a live Recent Activity feed driven by the `activity_logs` table.
+  * For staff view only: Include a dynamic Recharts BarChart showing the top 5 most-borrowed books with gradient bar fills and custom tooltips.
+- /catalog: Advanced catalog browse with search (title, author, ISBN) and filters (category, format, availability, year range). Includes a toggle for grid/list view and server-side pagination.
+- /catalog/[id]: Shows complete book metadata, real-time availability, and a conditional "Borrow" button.
+- /my-loans: Interactive dashboard with Active Loans (includes due dates, overdue badges, and action buttons for Return and Renew) and a complete Loan History below.
+- /all-loans: Librarians/Admins see all system loans with comprehensive filters by user, resource, and status, with an inline "Process Return" button.
+- /catalog-management: 
+  * Books Tab: Full CRUD operations to add, edit, or delete books. Available copies cannot be directly edited via the update form.
+  * Bulk Import Tab: Two-step import (paste JSON or CSV -> Preview & Validate -> Import). Performs validation for duplicate ISBNs, invalid formats, or missing fields, and highlights exact errors per row. The import must be all-or-nothing.
+- /users: Admins can list all registered users, update roles via a dropdown, and toggle user active status with a switch.
+- /profile: Allows users to update their name, department, or update password securely.
+
+### 4. Database Concurrency & Quotas
+- Concurrency Control: The 'Borrow Book' and 'Return Book' actions must be executed within an explicit Prisma interactive transaction (`$transaction`). Two users attempting to borrow the last remaining copy of a book simultaneously must be handled safely so that only one succeeds while the other fails gracefully with a quota or availability error.
+- Quota Enforcement: Students are limited to 5 active loans (14-day duration), while Faculty are limited to 10 active loans (30-day duration).
+- Renewal Constraints: Max 2 renewals per loan. Each renewal extends the dueDate by the user's standard duration calculated directly from the current dueDate.
+- Timestamps: Store and process all dates in UTC.
+
+### 5. Automated Testing Suite
+Include a comprehensive suite of backend and frontend tests (using Jest or Vitest) to guarantee quality. Cover these key minimum scenarios:
+- Authentication: Valid data creates a user; correct credentials return a session; accessing protected routes without login or after logout returns an unauthorized error; deactivated users cannot log in.
+- Catalog Permissions: Librarians can create a resource, but students receive a permission denied error. Searching and filtering work accurately. Attempting to set available_copies directly via an update is rejected.
+- Borrowing & Concurrency: A student can borrow an available book, causing available_copies to decrement by exactly 1. Rejects the borrow request if available copies are 0, if the user already has the book on an active loan, or if they have exceeded their quota limit.
+- Race Condition Test: Simulate two simultaneous borrow requests on a single available book copy to verify that only one succeeds and the second is rejected.

@@ -76,6 +76,25 @@ router.patch("/auth/me", authenticate as any, async (req: AuthRequest, res) => {
   res.json(serializeUser(updated));
 });
 
+router.post("/auth/change-password", authenticate as any, async (req: AuthRequest, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: "Validation", message: "currentPassword and newPassword are required" });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: "Validation", message: "New password must be at least 8 characters" });
+  }
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+  if (!user) return res.status(404).json({ error: "NotFound", message: "User not found" });
+  const valid = await comparePassword(currentPassword, user.passwordHash);
+  if (!valid) {
+    return res.status(400).json({ error: "Invalid", message: "Current password is incorrect" });
+  }
+  const passwordHash = await hashPassword(newPassword);
+  await db.update(usersTable).set({ passwordHash, updatedAt: new Date() }).where(eq(usersTable.id, user.id));
+  res.json({ message: "Password changed successfully" });
+});
+
 router.post("/auth/forgot-password", async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: "Validation", message: "Email is required" });
