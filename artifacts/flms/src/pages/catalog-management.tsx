@@ -32,6 +32,7 @@ import {
   ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Eye, FileCode, Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 const bookSchema = z.object({
   title: z.string().min(1, "Required"),
@@ -255,6 +256,7 @@ function BookForm({
 
 export default function CatalogManagementPage() {
   const { token } = useAuth();
+  const { t } = useI18n();
   const baseUrl = import.meta.env.BASE_URL;
   const apiBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
 
@@ -377,24 +379,24 @@ export default function CatalogManagementPage() {
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       <div>
-        <h1 className="font-serif text-2xl font-light" data-testid="heading-catalog-management">Catalog Management</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Add, edit, and manage the library book catalog</p>
+        <h1 className="font-serif text-2xl font-light" data-testid="heading-catalog-management">{t.catalogMgmt.title}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{t.catalogMgmt.subtitle}</p>
       </div>
 
       <Tabs defaultValue="books">
         <TabsList>
-          <TabsTrigger value="books">Books</TabsTrigger>
-          <TabsTrigger value="import" data-testid="tab-import">Bulk Import</TabsTrigger>
+          <TabsTrigger value="books">{t.catalogMgmt.books}</TabsTrigger>
+          <TabsTrigger value="import" data-testid="tab-import">{t.catalogMgmt.bulkImport}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="books" className="space-y-4 mt-4">
           <div className="flex items-center gap-3">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Search books..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} data-testid="input-search-books" />
+              <Input placeholder={t.catalogMgmt.searchBooks} className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} data-testid="input-search-books" />
             </div>
             <Button onClick={() => setAddOpen(true)} data-testid="button-add-book">
-              <Plus className="w-4 h-4 mr-2" />Add Book
+              <Plus className="w-4 h-4 mr-2" />{t.catalogMgmt.addBook}
             </Button>
           </div>
 
@@ -403,7 +405,7 @@ export default function CatalogManagementPage() {
           ) : !data?.data?.length ? (
             <div className="text-center py-12">
               <BookOpen className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-muted-foreground">No books in catalog</p>
+              <p className="text-muted-foreground">{t.catalogMgmt.noBooks}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -414,7 +416,7 @@ export default function CatalogManagementPage() {
                       <p className="font-medium text-sm truncate" data-testid={`book-title-${book.id}`}>{book.title}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <p className="text-xs text-muted-foreground">{book.author}</p>
-                        <span className="text-xs text-muted-foreground">{book.availableCopies}/{book.totalCopies} avail.</span>
+                        <span className="text-xs text-muted-foreground">{t.catalogMgmt.avail(book.availableCopies, book.totalCopies)}</span>
                         <Badge variant="outline" className="text-xs">{book.category}</Badge>
                       </div>
                     </div>
@@ -426,12 +428,12 @@ export default function CatalogManagementPage() {
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Delete book?</AlertDialogTitle>
-                            <AlertDialogDescription>This will permanently remove "{book.title}" from the catalog.</AlertDialogDescription>
+                            <AlertDialogTitle>{t.catalogMgmt.deleteBookTitle}</AlertDialogTitle>
+                            <AlertDialogDescription>{t.catalogMgmt.deleteBookDesc(book.title)}</AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(book.id, book.title)} className="bg-destructive hover:bg-destructive/90" data-testid={`button-confirm-delete-${book.id}`}>Delete</AlertDialogAction>
+                            <AlertDialogCancel>{t.catalogMgmt.cancel}</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(book.id, book.title)} className="bg-destructive hover:bg-destructive/90" data-testid={`button-confirm-delete-${book.id}`}>{t.catalogMgmt.delete}</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
@@ -444,7 +446,7 @@ export default function CatalogManagementPage() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Page {page} of {totalPages}</p>
+              <p className="text-sm text-muted-foreground">{t.common.pageOf(page, totalPages)}</p>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}><ChevronLeft className="w-4 h-4" /></Button>
                 <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight className="w-4 h-4" /></Button>
@@ -473,7 +475,7 @@ export default function CatalogManagementPage() {
                     className="font-mono text-xs" data-testid="textarea-import"
                   />
                   <Button onClick={handlePreview} disabled={!importText.trim()} variant="outline" data-testid="button-preview-import">
-                    <Eye className="w-4 h-4 mr-2" />Preview & Validate
+                    <Eye className="w-4 h-4 mr-2" />{t.catalogMgmt.previewValidate}
                   </Button>
                 </>
               ) : (
@@ -523,14 +525,14 @@ export default function CatalogManagementPage() {
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="font-serif">Add New Book</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-serif">{t.catalogMgmt.addBook}</DialogTitle></DialogHeader>
           <BookForm form={addForm} onSubmit={handleAdd} isPending={createMutation.isPending} baseUrl={apiBase} token={token} />
         </DialogContent>
       </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="font-serif">Edit Book</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-serif">{t.catalogMgmt.saveBook}</DialogTitle></DialogHeader>
           <BookForm form={editForm} onSubmit={handleEdit} isPending={updateMutation.isPending} baseUrl={apiBase} token={token} />
         </DialogContent>
       </Dialog>

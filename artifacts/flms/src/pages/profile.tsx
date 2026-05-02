@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { User, Loader2, Lock } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { useI18n } from "@/lib/i18n";
 
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -41,6 +42,7 @@ const ROLE_COLORS: Record<string, string> = {
 
 export default function ProfilePage() {
   const { user, token } = useAuth();
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const updateMutation = useUpdateMe();
   const [changingPassword, setChangingPassword] = useState(false);
@@ -96,8 +98,8 @@ export default function ProfilePage() {
   return (
     <div className="p-6 lg:p-8 max-w-2xl mx-auto space-y-8">
       <div>
-        <h1 className="font-serif text-2xl font-light" data-testid="heading-profile">My Profile</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Manage your account information and security</p>
+        <h1 className="font-serif text-2xl font-light" data-testid="heading-profile">{t.profile.title}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{t.profile.subtitle}</p>
       </div>
 
       {/* Avatar card */}
@@ -122,34 +124,36 @@ export default function ProfilePage() {
         <CardHeader>
           <CardTitle className="font-serif text-base font-medium flex items-center gap-2">
             <User className="w-4 h-4 text-primary" />
-            Edit Information
+            {t.profile.editInfo}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="profile-name">Full name</Label>
+              <Label htmlFor="profile-name">{t.profile.fullName}</Label>
               <Input id="profile-name" {...profileForm.register("name")} data-testid="input-profile-name" />
               {profileForm.formState.errors.name && <p className="text-xs text-destructive">{profileForm.formState.errors.name.message}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="profile-email">Email address</Label>
+              <Label htmlFor="profile-email">{t.profile.emailAddress}</Label>
               <Input id="profile-email" value={user?.email ?? ""} disabled className="bg-muted/50 text-muted-foreground cursor-not-allowed" data-testid="input-profile-email" />
-              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+              <p className="text-xs text-muted-foreground">{t.profile.emailCannotChange}</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="profile-department">Department</Label>
-                <Input id="profile-department" {...profileForm.register("department")} placeholder="e.g. Computer Science" data-testid="input-profile-department" />
+                <Label htmlFor="profile-department">{t.profile.department}</Label>
+                <Input id="profile-department" {...profileForm.register("department")} data-testid="input-profile-department" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="profile-phone">Phone</Label>
-                <Input id="profile-phone" {...profileForm.register("phone")} placeholder="e.g. 555-0101" data-testid="input-profile-phone" />
+                <Label htmlFor="profile-phone">{t.profile.phone}</Label>
+                <Input id="profile-phone" {...profileForm.register("phone")} data-testid="input-profile-phone" />
               </div>
             </div>
             <div className="pt-2">
               <Button type="submit" disabled={updateMutation.isPending} data-testid="button-save-profile">
-                {updateMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : "Save changes"}
+                {updateMutation.isPending
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.profile.saving}</>
+                  : t.profile.saveChanges}
               </Button>
             </div>
           </form>
@@ -161,29 +165,31 @@ export default function ProfilePage() {
         <CardHeader>
           <CardTitle className="font-serif text-base font-medium flex items-center gap-2">
             <Lock className="w-4 h-4 text-primary" />
-            Change Password
+            {t.profile.changePassword}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="current-password">Current password</Label>
+              <Label htmlFor="current-password">{t.profile.currentPassword}</Label>
               <Input id="current-password" type="password" {...passwordForm.register("currentPassword")} data-testid="input-current-password" />
               {passwordForm.formState.errors.currentPassword && <p className="text-xs text-destructive">{passwordForm.formState.errors.currentPassword.message}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="new-password">New password</Label>
+              <Label htmlFor="new-password">{t.profile.newPassword}</Label>
               <Input id="new-password" type="password" {...passwordForm.register("newPassword")} data-testid="input-new-password" />
               {passwordForm.formState.errors.newPassword && <p className="text-xs text-destructive">{passwordForm.formState.errors.newPassword.message}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="confirm-password">Confirm new password</Label>
+              <Label htmlFor="confirm-password">{t.profile.confirmPassword}</Label>
               <Input id="confirm-password" type="password" {...passwordForm.register("confirmPassword")} data-testid="input-confirm-password" />
               {passwordForm.formState.errors.confirmPassword && <p className="text-xs text-destructive">{passwordForm.formState.errors.confirmPassword.message}</p>}
             </div>
             <div className="pt-2">
               <Button type="submit" variant="outline" disabled={changingPassword} data-testid="button-change-password">
-                {changingPassword ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Updating…</> : "Update password"}
+                {changingPassword
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.profile.updating}</>
+                  : t.profile.updatePassword}
               </Button>
             </div>
           </form>
@@ -193,21 +199,23 @@ export default function ProfilePage() {
       {/* Account details */}
       <Card>
         <CardHeader>
-          <CardTitle className="font-serif text-base font-medium">Account Details</CardTitle>
+          <CardTitle className="font-serif text-base font-medium">{t.profile.accountDetails}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Account status</span>
-            <span className={`font-medium ${user?.isActive ? "text-green-600" : "text-destructive"}`}>{user?.isActive ? "Active" : "Inactive"}</span>
+            <span className="text-muted-foreground">{t.profile.accountStatus}</span>
+            <span className={`font-medium ${user?.isActive ? "text-green-600" : "text-destructive"}`}>
+              {user?.isActive ? t.profile.active : t.profile.inactive}
+            </span>
           </div>
           <Separator />
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Member since</span>
+            <span className="text-muted-foreground">{t.profile.memberSince}</span>
             <span>{user?.createdAt ? format(parseISO(user.createdAt), "MMMM d, yyyy") : "—"}</span>
           </div>
           <Separator />
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Role</span>
+            <span className="text-muted-foreground">{t.profile.role}</span>
             <span className={`text-xs px-2 py-0.5 rounded font-medium ${ROLE_COLORS[user?.role ?? "STUDENT"]}`}>{user?.role}</span>
           </div>
         </CardContent>

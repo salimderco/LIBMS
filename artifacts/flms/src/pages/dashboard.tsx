@@ -17,6 +17,7 @@ import { format, parseISO } from "date-fns";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
 } from "recharts";
+import { useI18n } from "@/lib/i18n";
 
 const ACTION_COLORS: Record<string, string> = {
   BORROWED: "bg-blue-100 text-blue-700",
@@ -36,6 +37,7 @@ const CHART_COLORS = [
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const isStaff = user?.role === "LIBRARIAN" || user?.role === "ADMIN";
 
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary({
@@ -55,16 +57,16 @@ export default function DashboardPage() {
 
   const statCards = isStaff
     ? [
-        { label: "Total Books", value: summary?.totalBooks, icon: BookOpen, color: "text-primary" },
-        { label: "Total Users", value: summary?.totalUsers, icon: Users, color: "text-purple-600" },
-        { label: "Active Loans", value: summary?.activeLoans, icon: ClipboardList, color: "text-amber-600" },
-        { label: "Overdue", value: summary?.overdueLoans, icon: AlertTriangle, color: "text-destructive" },
+        { label: t.dashboard.totalBooks, value: summary?.totalBooks, icon: BookOpen, color: "text-primary" },
+        { label: t.dashboard.totalUsers, value: summary?.totalUsers, icon: Users, color: "text-purple-600" },
+        { label: t.dashboard.activeLoans, value: summary?.activeLoans, icon: ClipboardList, color: "text-amber-600" },
+        { label: t.dashboard.overdue, value: summary?.overdueLoans, icon: AlertTriangle, color: "text-destructive" },
       ]
     : [
-        { label: "My Active Loans", value: summary?.myActiveLoans, icon: BookMarked, color: "text-primary" },
-        { label: "My Overdue", value: summary?.myOverdueLoans, icon: AlertTriangle, color: "text-destructive" },
-        { label: "Books Available", value: summary?.availableBooks, icon: BookOpen, color: "text-green-600" },
-        { label: "Total in Catalog", value: summary?.totalBooks, icon: TrendingUp, color: "text-muted-foreground" },
+        { label: t.dashboard.myActiveLoans, value: summary?.myActiveLoans, icon: BookMarked, color: "text-primary" },
+        { label: t.dashboard.myOverdue, value: summary?.myOverdueLoans, icon: AlertTriangle, color: "text-destructive" },
+        { label: t.dashboard.booksAvailable, value: summary?.availableBooks, icon: BookOpen, color: "text-green-600" },
+        { label: t.dashboard.totalInCatalog, value: summary?.totalBooks, icon: TrendingUp, color: "text-muted-foreground" },
       ];
 
   const chartData = (popularBooks?.data ?? []).map(item => ({
@@ -76,9 +78,9 @@ export default function DashboardPage() {
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-8">
       <div>
         <h1 className="font-serif text-2xl font-light" data-testid="heading-dashboard">
-          Good morning, {user?.name?.split(" ")[0]}.
+          {t.dashboard.greeting(user?.name?.split(" ")[0] ?? "")}
         </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Here's what's happening in the library today.</p>
+        <p className="text-sm text-muted-foreground mt-0.5">{t.dashboard.subtitle}</p>
       </div>
 
       {/* Stat cards */}
@@ -111,7 +113,7 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="font-serif text-base font-medium flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-primary" />
-              Most Borrowed Books
+              {t.dashboard.mostBorrowed}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -119,7 +121,7 @@ export default function DashboardPage() {
               <Skeleton className="h-48 w-full" />
             ) : chartData.length === 0 ? (
               <div className="h-48 flex items-center justify-center">
-                <p className="text-sm text-muted-foreground">No borrowing data yet</p>
+                <p className="text-sm text-muted-foreground">{t.dashboard.noBorrowingData}</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={200}>
@@ -150,7 +152,7 @@ export default function DashboardPage() {
                       return (
                         <div className="bg-popover border border-border rounded-md px-3 py-2 shadow-md text-xs">
                           <p className="font-medium">{payload[0].payload.title}</p>
-                          <p className="text-muted-foreground">{payload[0].value} borrow{payload[0].value === 1 ? "" : "s"}</p>
+                          <p className="text-muted-foreground">{t.dashboard.borrows(payload[0].value as number)}</p>
                         </div>
                       );
                     }}
@@ -174,14 +176,14 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="font-serif text-base font-medium flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-primary" />
-                Popular Books
+                {t.dashboard.popularBooks}
               </CardTitle>
               <Link
                 href="/catalog"
                 className="text-xs text-primary hover:underline flex items-center gap-1"
                 data-testid="link-view-catalog"
               >
-                View all <ArrowRight className="w-3 h-3" />
+                {t.dashboard.viewAll} <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
           </CardHeader>
@@ -217,7 +219,7 @@ export default function DashboardPage() {
                 </Link>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground py-4 text-center">No data yet</p>
+              <p className="text-sm text-muted-foreground py-4 text-center">{t.dashboard.noData}</p>
             )}
           </CardContent>
         </Card>
@@ -228,7 +230,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="font-serif text-base font-medium flex items-center gap-2">
                 <Activity className="w-4 h-4 text-primary" />
-                {isStaff ? "Recent Activity" : "My Outstanding Loans"}
+                {isStaff ? t.dashboard.recentActivity : t.dashboard.myOutstandingLoans}
               </CardTitle>
               {!isStaff && (
                 <Link
@@ -236,7 +238,7 @@ export default function DashboardPage() {
                   className="text-xs text-primary hover:underline flex items-center gap-1"
                   data-testid="link-view-loans"
                 >
-                  View all <ArrowRight className="w-3 h-3" />
+                  {t.dashboard.viewAll} <ArrowRight className="w-3 h-3" />
                 </Link>
               )}
             </div>
@@ -269,15 +271,15 @@ export default function DashboardPage() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground py-4 text-center">No activity yet</p>
+                <p className="text-sm text-muted-foreground py-4 text-center">{t.dashboard.noActivity}</p>
               )
             ) : (
               (summary?.myActiveLoans ?? 0) === 0 ? (
                 <div className="py-6 text-center">
                   <BookMarked className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">No active loans</p>
+                  <p className="text-sm text-muted-foreground">{t.dashboard.noActiveLoans}</p>
                   <Link href="/catalog" className="text-xs text-primary hover:underline mt-1 inline-block">
-                    Browse the catalog
+                    {t.dashboard.browseCatalog}
                   </Link>
                 </div>
               ) : (
@@ -286,12 +288,12 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/20">
                       <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />
                       <p className="text-sm text-destructive font-medium">
-                        {summary?.myOverdueLoans} overdue {summary?.myOverdueLoans === 1 ? "loan" : "loans"}
+                        {t.dashboard.overdueCount(summary?.myOverdueLoans ?? 0)}
                       </p>
                     </div>
                   )}
                   <p className="text-sm text-muted-foreground">
-                    {summary?.myActiveLoans} active {(summary?.myActiveLoans ?? 0) === 1 ? "loan" : "loans"} — check My Loans for details.
+                    {t.dashboard.activeCount(summary?.myActiveLoans ?? 0)}
                   </p>
                 </div>
               )

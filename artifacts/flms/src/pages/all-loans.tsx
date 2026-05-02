@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Search, BookMarked, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isPast } from "date-fns";
+import { useI18n } from "@/lib/i18n";
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "bg-blue-100 text-blue-700",
@@ -25,6 +26,7 @@ const PAGE_SIZE = 20;
 
 export default function AllLoansPage() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
   const [page, setPage] = useState(1);
@@ -72,12 +74,18 @@ export default function AllLoansPage() {
     );
   };
 
+  const statusLabel: Record<string, string> = {
+    ACTIVE: t.allLoans.active,
+    RETURNED: t.allLoans.returned,
+    OVERDUE: t.allLoans.overdue,
+  };
+
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       <div>
-        <h1 className="font-serif text-2xl font-light" data-testid="heading-all-loans">All Loans</h1>
+        <h1 className="font-serif text-2xl font-light" data-testid="heading-all-loans">{t.allLoans.title}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          {isLoading ? "Loading..." : `${data?.totalRecords ?? 0} total loans`}
+          {isLoading ? t.common.loading : t.allLoans.totalLoans(data?.totalRecords ?? 0)}
         </p>
       </div>
 
@@ -85,7 +93,7 @@ export default function AllLoansPage() {
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by user or book title..."
+            placeholder={t.allLoans.searchPlaceholder}
             className="pl-9"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -94,13 +102,13 @@ export default function AllLoansPage() {
         </div>
         <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
           <SelectTrigger className="w-36" data-testid="select-loan-status">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder={t.allLoans.allStatus} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All status</SelectItem>
-            <SelectItem value="ACTIVE">Active</SelectItem>
-            <SelectItem value="OVERDUE">Overdue</SelectItem>
-            <SelectItem value="RETURNED">Returned</SelectItem>
+            <SelectItem value="all">{t.allLoans.allStatus}</SelectItem>
+            <SelectItem value="ACTIVE">{t.allLoans.active}</SelectItem>
+            <SelectItem value="OVERDUE">{t.allLoans.overdue}</SelectItem>
+            <SelectItem value="RETURNED">{t.allLoans.returned}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -110,17 +118,17 @@ export default function AllLoansPage() {
       ) : !data?.data?.length ? (
         <div className="text-center py-16">
           <BookMarked className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-muted-foreground">No loans found</p>
+          <p className="text-muted-foreground">{t.allLoans.noLoans}</p>
         </div>
       ) : (
         <div className="space-y-2">
           <div className="hidden md:grid grid-cols-[1fr_1fr_120px_100px_80px_130px] gap-4 px-4 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            <span>Book</span>
-            <span>Borrower</span>
-            <span>Borrowed</span>
-            <span>Due</span>
-            <span>Status</span>
-            <span>Action</span>
+            <span>{t.allLoans.book}</span>
+            <span>{t.allLoans.borrower}</span>
+            <span>{t.allLoans.borrowed}</span>
+            <span>{t.allLoans.due}</span>
+            <span>{t.allLoans.status}</span>
+            <span>{t.allLoans.action}</span>
           </div>
 
           {data.data.map(loan => {
@@ -144,7 +152,7 @@ export default function AllLoansPage() {
                     {format(parseISO(loan.dueDate), "MMM d")}
                   </p>
                   <span className={cn("text-xs px-2 py-1 rounded-full font-medium inline-block text-center", STATUS_COLORS[computedStatus])}>
-                    {computedStatus}
+                    {statusLabel[computedStatus] ?? computedStatus}
                   </span>
                   {computedStatus !== "RETURNED" ? (
                     <Button
@@ -157,7 +165,7 @@ export default function AllLoansPage() {
                       {returningId === loan.id ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : (
-                        "Process Return"
+                        t.allLoans.processReturn
                       )}
                     </Button>
                   ) : (
@@ -174,7 +182,7 @@ export default function AllLoansPage() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
-          <p className="text-sm text-muted-foreground">Page {page} of {totalPages}</p>
+          <p className="text-sm text-muted-foreground">{t.common.pageOf(page, totalPages)}</p>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)} data-testid="button-prev-page">
               <ChevronLeft className="w-4 h-4" />

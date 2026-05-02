@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useI18n } from "@/lib/i18n";
 
 const PAGE_SIZE = 12;
 
@@ -33,6 +34,7 @@ interface AISuggestion {
 
 export default function CatalogPage() {
   const { token, user } = useAuth();
+  const { t } = useI18n();
   const baseUrl = import.meta.env.BASE_URL;
   const apiBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
 
@@ -106,9 +108,9 @@ export default function CatalogPage() {
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl font-light" data-testid="heading-catalog">Book Catalog</h1>
+          <h1 className="font-serif text-2xl font-light" data-testid="heading-catalog">{t.catalog.title}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {isLoading ? "Loading..." : `${data?.totalRecords ?? 0} titles available`}
+            {isLoading ? t.common.loading : t.catalog.titlesAvailable(data?.totalRecords ?? 0)}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -124,7 +126,7 @@ export default function CatalogPage() {
               {suggestionsLoading
                 ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 : <Sparkles className="w-3.5 h-3.5 text-amber-500" />}
-              {suggestionsLoading ? "Thinking…" : "AI Suggestions"}
+              {suggestionsLoading ? t.catalog.thinking : t.catalog.aiSuggestions}
             </Button>
           )}
           <div className="flex items-center gap-1 border rounded-md overflow-hidden">
@@ -153,8 +155,8 @@ export default function CatalogPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="font-serif text-sm font-medium flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-amber-500" />
-                AI Smart Suggestions
-                <span className="text-xs font-normal text-muted-foreground">Based on your borrowing history</span>
+                {t.catalog.aiSmartSuggestions}
+                <span className="text-xs font-normal text-muted-foreground">{t.catalog.basedOnHistory}</span>
               </CardTitle>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowSuggestions(false)}>
                 <X className="w-3.5 h-3.5" />
@@ -167,7 +169,7 @@ export default function CatalogPage() {
                 {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
               </div>
             ) : !suggestionsData?.suggestions?.length ? (
-              <p className="text-sm text-muted-foreground py-2">No suggestions available yet — borrow a few books first!</p>
+              <p className="text-sm text-muted-foreground py-2">{t.catalog.noSuggestions}</p>
             ) : (
               <div className="grid sm:grid-cols-3 gap-3">
                 {suggestionsData.suggestions.map((s) => (
@@ -202,7 +204,7 @@ export default function CatalogPage() {
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by title, author, ISBN..."
+            placeholder={t.catalog.searchPlaceholder}
             className="pl-9"
             value={query}
             onChange={(e) => { setQuery(e.target.value); handleFilterChange(); }}
@@ -212,10 +214,10 @@ export default function CatalogPage() {
 
         <Select value={category} onValueChange={(v) => { setCategory(v); handleFilterChange(); }}>
           <SelectTrigger className="w-44" data-testid="select-category">
-            <SelectValue placeholder="Category" />
+            <SelectValue placeholder={t.catalog.allCategories} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
+            <SelectItem value="all">{t.catalog.allCategories}</SelectItem>
             {categories?.categories?.map(cat => (
               <SelectItem key={cat} value={cat}>{cat}</SelectItem>
             ))}
@@ -224,29 +226,29 @@ export default function CatalogPage() {
 
         <Select value={format} onValueChange={(v) => { setFormat(v); handleFilterChange(); }}>
           <SelectTrigger className="w-36" data-testid="select-format">
-            <SelectValue placeholder="Format" />
+            <SelectValue placeholder={t.catalog.allFormats} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All formats</SelectItem>
-            <SelectItem value="PHYSICAL">Physical</SelectItem>
-            <SelectItem value="DIGITAL">Digital</SelectItem>
+            <SelectItem value="all">{t.catalog.allFormats}</SelectItem>
+            <SelectItem value="PHYSICAL">{t.catalog.physical}</SelectItem>
+            <SelectItem value="DIGITAL">{t.catalog.digital}</SelectItem>
           </SelectContent>
         </Select>
 
         <Select value={availability} onValueChange={(v) => { setAvailability(v); handleFilterChange(); }}>
           <SelectTrigger className="w-40" data-testid="select-availability">
-            <SelectValue placeholder="Availability" />
+            <SelectValue placeholder={t.catalog.anyAvailability} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Any availability</SelectItem>
-            <SelectItem value="available">Available now</SelectItem>
+            <SelectItem value="all">{t.catalog.anyAvailability}</SelectItem>
+            <SelectItem value="available">{t.catalog.availableNow}</SelectItem>
           </SelectContent>
         </Select>
 
         <div className="flex items-center gap-1">
           <Input
             type="number"
-            placeholder="From year"
+            placeholder={t.catalog.fromYear}
             className="w-24 text-sm"
             value={yearFrom}
             onChange={(e) => { setYearFrom(e.target.value); handleFilterChange(); }}
@@ -255,7 +257,7 @@ export default function CatalogPage() {
           <span className="text-muted-foreground text-xs">–</span>
           <Input
             type="number"
-            placeholder="To year"
+            placeholder={t.catalog.toYear}
             className="w-24 text-sm"
             value={yearTo}
             onChange={(e) => { setYearTo(e.target.value); handleFilterChange(); }}
@@ -270,7 +272,7 @@ export default function CatalogPage() {
             onClick={() => { setQuery(""); setCategory("all"); setFormat("all"); setAvailability("all"); setYearFrom(""); setYearTo(""); setPage(1); }}
             data-testid="button-clear-filters"
           >
-            Clear filters
+            {t.catalog.clearFilters}
           </Button>
         )}
       </div>
@@ -285,9 +287,9 @@ export default function CatalogPage() {
       ) : !data?.data?.length ? (
         <div className="text-center py-16">
           <BookOpen className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-muted-foreground">No books found matching your criteria</p>
+          <p className="text-muted-foreground">{t.catalog.noBooksFound}</p>
           <Button variant="link" onClick={() => { setQuery(""); setCategory("all"); setFormat("all"); setAvailability("all"); setYearFrom(""); setYearTo(""); }}>
-            Clear filters
+            {t.catalog.clearFilters}
           </Button>
         </div>
       ) : (() => {
@@ -303,7 +305,7 @@ export default function CatalogPage() {
           return (
             <div className="text-center py-16">
               <BookOpen className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-muted-foreground">No books in that year range</p>
+              <p className="text-muted-foreground">{t.catalog.noBooksInRange}</p>
             </div>
           );
         }
@@ -327,7 +329,7 @@ export default function CatalogPage() {
                         className="text-xs"
                         data-testid={`badge-availability-${book.id}`}
                       >
-                        {book.availableCopies > 0 ? `${book.availableCopies} avail.` : "Unavailable"}
+                        {book.availableCopies > 0 ? t.catalog.avail(book.availableCopies) : t.catalog.unavailable}
                       </Badge>
                       {book.format === "DIGITAL"
                         ? <Wifi className="w-3.5 h-3.5 text-muted-foreground" />
@@ -354,11 +356,11 @@ export default function CatalogPage() {
                     <div className="hidden md:flex items-center gap-3">
                       <Badge variant="outline" className="text-xs">{book.category}</Badge>
                       {book.format === "DIGITAL"
-                        ? <Badge variant="secondary" className="text-xs">Digital</Badge>
+                        ? <Badge variant="secondary" className="text-xs">{t.catalog.digital}</Badge>
                         : <Badge variant="outline" className="text-xs">{book.shelfLocation}</Badge>}
                     </div>
                     <Badge variant={book.availableCopies > 0 ? "default" : "secondary"} className="text-xs whitespace-nowrap">
-                      {book.availableCopies > 0 ? `${book.availableCopies}/${book.totalCopies}` : "Unavailable"}
+                      {book.availableCopies > 0 ? `${book.availableCopies}/${book.totalCopies}` : t.catalog.unavailable}
                     </Badge>
                   </CardContent>
                 </Card>
@@ -370,7 +372,7 @@ export default function CatalogPage() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
-          <p className="text-sm text-muted-foreground">Page {page} of {totalPages}</p>
+          <p className="text-sm text-muted-foreground">{t.common.pageOf(page, totalPages)}</p>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)} data-testid="button-prev-page">
               <ChevronLeft className="w-4 h-4" />

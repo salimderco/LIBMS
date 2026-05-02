@@ -15,11 +15,13 @@ import {
   BookOpen, ArrowLeft, MapPin, Wifi, BookMarked,
   Calendar, Hash, Building, Layers, Loader2
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface Props { bookId: number }
 
 export default function BookDetailPage({ bookId }: Props) {
   const { user } = useAuth();
+  const { t } = useI18n();
   const queryClient = useQueryClient();
 
   const { data: book, isLoading } = useGetBook(bookId, {
@@ -68,8 +70,8 @@ export default function BookDetailPage({ bookId }: Props) {
   if (!book) {
     return (
       <div className="p-8 text-center">
-        <p className="text-muted-foreground">Book not found.</p>
-        <Link href="/catalog" className="text-primary hover:underline text-sm mt-2 block">Back to catalog</Link>
+        <p className="text-muted-foreground">{t.bookDetail.bookNotFound}</p>
+        <Link href="/catalog" className="text-primary hover:underline text-sm mt-2 block">{t.bookDetail.backLink}</Link>
       </div>
     );
   }
@@ -84,7 +86,7 @@ export default function BookDetailPage({ bookId }: Props) {
         data-testid="link-back-catalog"
       >
         <ArrowLeft className="w-4 h-4" />
-        Back to catalog
+        {t.bookDetail.backToCatalog}
       </Link>
 
       <div className="grid md:grid-cols-3 gap-8">
@@ -95,14 +97,14 @@ export default function BookDetailPage({ bookId }: Props) {
 
           <div className="rounded-lg border p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Availability</span>
+              <span className="text-sm font-medium">{t.bookDetail.availability}</span>
               <Badge variant={isAvailable ? "default" : "secondary"} data-testid="badge-available">
-                {isAvailable ? "Available" : "Unavailable"}
+                {isAvailable ? t.bookDetail.available : t.bookDetail.unavailable}
               </Badge>
             </div>
             {book.format === "PHYSICAL" && (
               <p className="text-xs text-muted-foreground">
-                {book.availableCopies} of {book.totalCopies} {book.totalCopies === 1 ? "copy" : "copies"} available
+                {t.bookDetail.copiesAvailable(book.availableCopies, book.totalCopies)}
               </p>
             )}
             {canBorrow && (
@@ -113,9 +115,9 @@ export default function BookDetailPage({ bookId }: Props) {
                 data-testid="button-borrow"
               >
                 {borrowMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Borrowing...</>
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.bookDetail.borrowing}</>
                 ) : (
-                  <><BookMarked className="w-4 h-4 mr-2" />Borrow this book</>
+                  <><BookMarked className="w-4 h-4 mr-2" />{t.bookDetail.borrowBook}</>
                 )}
               </Button>
             )}
@@ -128,11 +130,11 @@ export default function BookDetailPage({ bookId }: Props) {
               <Badge variant="outline">{book.category}</Badge>
               {book.format === "DIGITAL" ? (
                 <Badge variant="secondary" className="flex items-center gap-1">
-                  <Wifi className="w-3 h-3" /> Digital
+                  <Wifi className="w-3 h-3" /> {t.bookDetail.digital}
                 </Badge>
               ) : (
                 <Badge variant="secondary" className="flex items-center gap-1">
-                  <BookMarked className="w-3 h-3" /> Physical
+                  <BookMarked className="w-3 h-3" /> {t.bookDetail.physical}
                 </Badge>
               )}
             </div>
@@ -150,12 +152,12 @@ export default function BookDetailPage({ bookId }: Props) {
 
           <div className="grid grid-cols-2 gap-4">
             {[
-              { icon: Hash, label: "ISBN", value: book.isbn },
-              { icon: Building, label: "Publisher", value: book.publisher },
-              { icon: Calendar, label: "Year", value: book.publicationYear?.toString() },
-              { icon: Layers, label: "Edition", value: book.edition },
+              { icon: Hash, label: t.bookDetail.isbn, value: book.isbn },
+              { icon: Building, label: t.bookDetail.publisher, value: book.publisher },
+              { icon: Calendar, label: t.bookDetail.year, value: book.publicationYear?.toString() },
+              { icon: Layers, label: t.bookDetail.edition, value: book.edition },
               ...(book.format === "PHYSICAL" && book.shelfLocation ? [
-                { icon: MapPin, label: "Shelf", value: book.shelfLocation }
+                { icon: MapPin, label: t.bookDetail.shelf, value: book.shelfLocation }
               ] : []),
             ].map(({ icon: Icon, label, value }) => value ? (
               <div key={label} className="flex items-start gap-2">
@@ -170,7 +172,7 @@ export default function BookDetailPage({ bookId }: Props) {
 
           {(book.tags?.length ?? 0) > 0 && (
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Tags</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">{t.bookDetail.tags}</p>
               <div className="flex flex-wrap gap-1.5">
                 {book.tags.map(tag => (
                   <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>

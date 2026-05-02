@@ -15,11 +15,13 @@ import { toast } from "sonner";
 import { Search, Users, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
+import { useI18n } from "@/lib/i18n";
 
 const PAGE_SIZE = 20;
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
@@ -59,16 +61,16 @@ export default function UsersPage() {
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="font-serif text-2xl font-light" data-testid="heading-users">User Management</h1>
+        <h1 className="font-serif text-2xl font-light" data-testid="heading-users">{t.users.title}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          {isLoading ? "Loading..." : `${data?.totalRecords ?? 0} registered users`}
+          {isLoading ? t.common.loading : t.users.registeredUsers(data?.totalRecords ?? 0)}
         </p>
       </div>
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
-          placeholder="Search users..."
+          placeholder={t.users.searchPlaceholder}
           className="pl-9"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -81,7 +83,7 @@ export default function UsersPage() {
       ) : !data?.data?.length ? (
         <div className="text-center py-16">
           <Users className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-muted-foreground">No users found</p>
+          <p className="text-muted-foreground">{t.users.noUsers}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -108,7 +110,7 @@ export default function UsersPage() {
 
                   <div className="flex items-center gap-4 flex-shrink-0 flex-wrap">
                     <span className="text-xs text-muted-foreground hidden lg:block">
-                      Joined {format(parseISO(user.createdAt), "MMM d, yyyy")}
+                      {t.users.joined} {format(parseISO(user.createdAt), "MMM d, yyyy")}
                     </span>
 
                     <Select
@@ -116,14 +118,14 @@ export default function UsersPage() {
                       onValueChange={(v) => handleUpdate(user.id, user.name, { role: v as UpdateUserBodyRole })}
                       disabled={isUpdating}
                     >
-                      <SelectTrigger className="w-32 h-8 text-xs" data-testid={`select-role-${user.id}`}>
+                      <SelectTrigger className="w-36 h-8 text-xs" data-testid={`select-role-${user.id}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="STUDENT">Student</SelectItem>
-                        <SelectItem value="FACULTY">Faculty</SelectItem>
-                        <SelectItem value="LIBRARIAN">Librarian</SelectItem>
-                        <SelectItem value="ADMIN">Admin</SelectItem>
+                        <SelectItem value="STUDENT">{t.users.student}</SelectItem>
+                        <SelectItem value="FACULTY">{t.users.faculty}</SelectItem>
+                        <SelectItem value="LIBRARIAN">{t.users.librarian}</SelectItem>
+                        <SelectItem value="ADMIN">{t.users.admin}</SelectItem>
                       </SelectContent>
                     </Select>
 
@@ -137,7 +139,7 @@ export default function UsersPage() {
                           data-testid={`switch-active-${user.id}`}
                         />
                       )}
-                      <span className="text-xs text-muted-foreground">{user.isActive ? "Active" : "Inactive"}</span>
+                      <span className="text-xs text-muted-foreground">{user.isActive ? t.users.active : t.users.inactive}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -149,7 +151,7 @@ export default function UsersPage() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
-          <p className="text-sm text-muted-foreground">Page {page} of {totalPages}</p>
+          <p className="text-sm text-muted-foreground">{t.common.pageOf(page, totalPages)}</p>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
               <ChevronLeft className="w-4 h-4" />
