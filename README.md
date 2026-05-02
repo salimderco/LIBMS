@@ -1,5 +1,5 @@
 # Faculty Library Management System (FLMS)
-
+![FLMS Banner](assets/banner.png)
 A full-stack web application for managing a university library — built with React, Express 5, PostgreSQL, and Drizzle ORM. Supports four user roles with a complete set of borrowing, cataloguing, and administrative features.
 
 This a temporary link its expired when my replit session closed ::
