@@ -3,23 +3,10 @@ import { db } from "@workspace/db";
 import { loansTable, booksTable, usersTable, activityLogsTable, notificationsTable } from "@workspace/db";
 import { eq, and, count, sql } from "drizzle-orm";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate.js";
+import { getPolicy } from "./loan-policy.js";
+import { fulfillNextReservation } from "./reservations.js";
 
 const router = Router();
-
-const STUDENT_LOAN_DAYS = 14;
-const FACULTY_LOAN_DAYS = 30;
-const STUDENT_QUOTA = 5;
-const FACULTY_QUOTA = 10;
-const MAX_RENEWALS = 2;
-const FINE_PER_DAY = 0.50;
-
-function getLoanDays(role: string): number {
-  return role === "FACULTY" ? FACULTY_LOAN_DAYS : STUDENT_LOAN_DAYS;
-}
-
-function getQuota(role: string): number {
-  return role === "FACULTY" ? FACULTY_QUOTA : STUDENT_QUOTA;
-}
 
 function computeStatus(loan: typeof loansTable.$inferSelect): "ACTIVE" | "RETURNED" | "OVERDUE" {
   if (loan.returnedAt) return "RETURNED";
@@ -27,7 +14,7 @@ function computeStatus(loan: typeof loansTable.$inferSelect): "ACTIVE" | "RETURN
   return "ACTIVE";
 }
 
-function computeFineAmount(loan: typeof loansTable.$inferSelect): number {
+export function computeFineAmount(loan: typeof loansTable.$inferSelect, fineRatePerDay = 0.50): number {
   if (loan.returnedAt) return 0;
   const now = new Date();
   const effectiveStart = loan.finePaidAt && loan.finePaidAt > loan.dueDate
@@ -36,14 +23,15 @@ function computeFineAmount(loan: typeof loansTable.$inferSelect): number {
   if (now <= effectiveStart) return 0;
   const msPerDay = 1000 * 60 * 60 * 24;
   const daysOverdue = Math.floor((now.getTime() - effectiveStart.getTime()) / msPerDay);
-  return Math.max(0, daysOverdue * FINE_PER_DAY);
+  return Math.max(0, daysOverdue * fineRatePerDay);
 }
 
 async function serializeLoan(loan: typeof loansTable.$inferSelect) {
   const [book] = await db.select().from(booksTable).where(eq(booksTable.id, loan.bookId)).limit(1);
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, loan.userId)).limit(1);
+  const policy = await getPolicy();
   const status = computeStatus(loan);
-  const fineAccrued = computeFineAmount(loan);
+  const fineAccrued = computeFineAmount(loan, policy.fineRatePerDay);
   return {
     id: loan.id,
     userId: loan.userId,
@@ -99,27 +87,28 @@ async function ensureDueSoonNotifications(userId: number, loans: (typeof loansTa
         });
       }
     }
-    if (dueDate < now && computeFineAmount(loan) > 0) {
-      const existing = await db
-        .select()
-        .from(notificationsTable)
-        .where(
-          and(
-            eq(notificationsTable.userId, userId),
-            eq(notificationsTable.type, "OVERDUE_FINE"),
-            eq(notificationsTable.relatedLoanId as any, loan.id)
+    if (dueDate < now) {
+      const policy = await getPolicy();
+      const fine = computeFineAmount(loan, policy.fineRatePerDay);
+      if (fine > 0) {
+        const existing = await db
+          .select()
+          .from(notificationsTable)
+          .where(
+            and(
+              eq(notificationsTable.userId, userId),
+              eq(notificationsTable.type, "OVERDUE_FINE"),
+              eq(notificationsTable.relatedLoanId as any, loan.id)
+            )
           )
-        )
-        .limit(1);
-      const fine = computeFineAmount(loan);
-      if (existing.length === 0 || fine > 0) {
+          .limit(1);
         if (existing.length === 0) {
           const [book] = await db.select().from(booksTable).where(eq(booksTable.id, loan.bookId)).limit(1);
           await db.insert(notificationsTable).values({
             userId,
             type: "OVERDUE_FINE",
             title: "Overdue Fine Accruing",
-            message: `"${book?.title ?? "A book"}" is overdue. A fine of $${fine.toFixed(2)} has accrued at $0.50/day.`,
+            message: `"${book?.title ?? "A book"}" is overdue. A fine of $${fine.toFixed(2)} has accrued at $${policy.fineRatePerDay.toFixed(2)}/day.`,
             relatedLoanId: loan.id,
           });
         }
@@ -175,6 +164,11 @@ router.post("/loans/borrow", authenticate as any, async (req: AuthRequest, res) 
   if (!["STUDENT", "FACULTY"].includes(role)) {
     return res.status(403).json({ error: "Forbidden", message: "Only students and faculty can borrow books" });
   }
+
+  const policy = await getPolicy();
+
+  const getQuota = (r: string) => r === "FACULTY" ? policy.facultyQuota : policy.studentQuota;
+  const getLoanDays = (r: string) => r === "FACULTY" ? policy.facultyLoanDays : policy.studentLoanDays;
 
   try {
     const loan = await db.transaction(async (tx) => {
@@ -264,6 +258,8 @@ router.post("/loans/:loanId/return", authenticate as any, requireRole("LIBRARIAN
     });
   });
 
+  await fulfillNextReservation(loan.bookId);
+
   const [updated] = await db.select().from(loansTable).where(eq(loansTable.id, loanId)).limit(1);
   const serialized = await serializeLoan(updated);
   res.json(serialized);
@@ -275,13 +271,16 @@ router.post("/loans/:loanId/renew", authenticate as any, async (req: AuthRequest
   if (!loan) return res.status(404).json({ error: "NotFound", message: "Loan not found" });
   if (loan.userId !== req.user!.id) return res.status(403).json({ error: "Forbidden", message: "Cannot renew another user's loan" });
   if (loan.returnedAt) return res.status(400).json({ error: "Invalid", message: "Cannot renew a returned loan" });
-  if (loan.renewalsCount >= MAX_RENEWALS) {
-    return res.status(400).json({ error: "MaxRenewals", message: `Maximum ${MAX_RENEWALS} renewals reached` });
+
+  const policy = await getPolicy();
+  if (loan.renewalsCount >= policy.maxRenewals) {
+    return res.status(400).json({ error: "MaxRenewals", message: `Maximum ${policy.maxRenewals} renewals reached` });
   }
 
   const role = req.user!.role;
+  const loanDays = role === "FACULTY" ? policy.facultyLoanDays : policy.studentLoanDays;
   const newDue = new Date(loan.dueDate);
-  newDue.setDate(newDue.getDate() + getLoanDays(role));
+  newDue.setDate(newDue.getDate() + loanDays);
 
   const [updated] = await db
     .update(loansTable)
@@ -300,5 +299,4 @@ router.post("/loans/:loanId/renew", authenticate as any, async (req: AuthRequest
   res.json(serialized);
 });
 
-export { computeFineAmount };
 export default router;

@@ -3,12 +3,11 @@ import { db } from "@workspace/db";
 import { loansTable, booksTable } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate.js";
+import { getPolicy } from "./loan-policy.js";
 
 const router = Router();
 
-const FINE_PER_DAY = 0.50;
-
-function computeFineAmount(loan: typeof loansTable.$inferSelect): number {
+function computeFineAmount(loan: typeof loansTable.$inferSelect, fineRatePerDay: number): number {
   if (loan.returnedAt) return 0;
   const now = new Date();
   const effectiveStart = loan.finePaidAt && loan.finePaidAt > loan.dueDate
@@ -17,7 +16,7 @@ function computeFineAmount(loan: typeof loansTable.$inferSelect): number {
   if (now <= effectiveStart) return 0;
   const msPerDay = 1000 * 60 * 60 * 24;
   const daysOverdue = Math.floor((now.getTime() - effectiveStart.getTime()) / msPerDay);
-  return Math.max(0, daysOverdue * FINE_PER_DAY);
+  return Math.max(0, daysOverdue * fineRatePerDay);
 }
 
 function getDaysOverdue(loan: typeof loansTable.$inferSelect): number {
@@ -33,6 +32,7 @@ function getDaysOverdue(loan: typeof loansTable.$inferSelect): number {
 
 router.get("/fines/my", authenticate as any, async (req: AuthRequest, res) => {
   const userId = req.user!.id;
+  const policy = await getPolicy();
   const loans = await db
     .select()
     .from(loansTable)
@@ -40,7 +40,7 @@ router.get("/fines/my", authenticate as any, async (req: AuthRequest, res) => {
 
   const items = await Promise.all(
     loans.map(async (loan) => {
-      const fine = computeFineAmount(loan);
+      const fine = computeFineAmount(loan, policy.fineRatePerDay);
       if (fine <= 0) return null;
       const [book] = await db.select().from(booksTable).where(eq(booksTable.id, loan.bookId)).limit(1);
       return {
@@ -60,6 +60,7 @@ router.get("/fines/my", authenticate as any, async (req: AuthRequest, res) => {
     totalOutstanding: Math.round(totalOutstanding * 100) / 100,
     items: filtered,
     hasOutstanding: filtered.length > 0,
+    fineRatePerDay: policy.fineRatePerDay,
   });
 });
 
@@ -70,6 +71,7 @@ router.post("/fines/pay", authenticate as any, async (req: AuthRequest, res) => 
   }
 
   const userId = req.user!.id;
+  const policy = await getPolicy();
   const loans = await db
     .select()
     .from(loansTable)
@@ -80,7 +82,7 @@ router.post("/fines/pay", authenticate as any, async (req: AuthRequest, res) => 
   const now = new Date();
 
   for (const loan of loans) {
-    const fine = computeFineAmount(loan);
+    const fine = computeFineAmount(loan, policy.fineRatePerDay);
     if (fine > 0) {
       totalCleared += fine;
       loansCleared++;

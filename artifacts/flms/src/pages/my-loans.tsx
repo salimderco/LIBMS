@@ -6,6 +6,7 @@ import {
   getGetDashboardSummaryQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,18 +17,34 @@ import { toast } from "sonner";
 import { Link } from "wouter";
 import {
   BookMarked, AlertTriangle, Clock, RotateCcw, CheckCircle,
-  BookOpen, ArrowRight, DollarSign, CreditCard, ShieldCheck
+  BookOpen, ArrowRight, DollarSign, CreditCard, ShieldCheck, Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { differenceInDays, isPast } from "date-fns";
+import { differenceInDays, isPast, format } from "date-fns";
 import { useI18n, formatLocalDate } from "@/lib/i18n";
 import PaymentModal from "@/components/payment-modal";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+interface Reservation {
+  id: number;
+  bookId: number;
+  status: string;
+  queuePosition: number;
+  expiresAt: string | null;
+  createdAt: string;
+  book?: { id: number; title: string; author: string; availableCopies: number };
+}
 
 export default function MyLoansPage() {
   const queryClient = useQueryClient();
   const { t } = useI18n();
+  const { token } = useAuth();
+  const baseUrl = import.meta.env.BASE_URL;
+  const apiBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
   const [payModalOpen, setPayModalOpen] = useState(false);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [reservationsLoading, setReservationsLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
 
   const { data, isLoading } = useGetMyLoans({
     query: { queryKey: getGetMyLoansQueryKey() }
@@ -38,6 +55,15 @@ export default function MyLoansPage() {
   });
 
   const renewMutation = useRenewLoan();
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${apiBase}api/reservations/my`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setReservations(d.data ?? []))
+      .catch(() => {})
+      .finally(() => setReservationsLoading(false));
+  }, [token]);
 
   const handleRenew = (loanId: number, bookTitle?: string) => {
     renewMutation.mutate(
@@ -56,6 +82,23 @@ export default function MyLoansPage() {
         }
       }
     );
+  };
+
+  const handleCancelReservation = async (id: number) => {
+    setCancellingId(id);
+    try {
+      const resp = await fetch(`${apiBase}api/reservations/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) throw new Error("Cancel failed");
+      setReservations(prev => prev.filter(r => r.id !== id));
+      toast.success(t.reservations.cancelReservation, { description: "Your spot has been released." });
+    } catch {
+      toast.error("Failed to cancel reservation");
+    } finally {
+      setCancellingId(null);
+    }
   };
 
   const handlePaySuccess = () => {
@@ -79,7 +122,7 @@ export default function MyLoansPage() {
 
   const overdueCount = activeLoan.filter(l => isPast(new Date(l.dueDate))).length;
   const totalFine = finesData?.totalOutstanding ?? 0;
-  const fineItemCount = finesData?.items?.length ?? 0;
+  const activeReservations = reservations.filter(r => r.status === "PENDING" || r.status === "READY");
 
   return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
@@ -89,7 +132,7 @@ export default function MyLoansPage() {
       </div>
 
       {overdueCount > 0 && (
-        <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200">
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/10 dark:border-red-800">
           <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-red-800">{t.myLoans.overdueAlert(overdueCount)}</p>
@@ -104,18 +147,21 @@ export default function MyLoansPage() {
       )}
 
       <Tabs defaultValue="active">
-        <TabsList className="w-full grid grid-cols-3">
+        <TabsList className="w-full grid grid-cols-4">
           <TabsTrigger value="active" className="gap-1.5">
             {t.myLoans.activeLoans}
             {activeLoan.length > 0 && (
               <Badge variant="secondary" className="text-[10px] h-4 px-1">{activeLoan.length}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="reservations" className="gap-1.5">
+            {t.reservations.title.split(" ")[1] ?? "Reservations"}
+            {activeReservations.length > 0 && (
+              <Badge variant="secondary" className="text-[10px] h-4 px-1">{activeReservations.length}</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5">
             {t.myLoans.history}
-            {historyLoans.length > 0 && (
-              <Badge variant="secondary" className="text-[10px] h-4 px-1">{historyLoans.length}</Badge>
-            )}
           </TabsTrigger>
           <TabsTrigger value="fines" className="gap-1.5 relative">
             {t.myLoans.finesBilling}
@@ -133,11 +179,7 @@ export default function MyLoansPage() {
             <div className="py-12 text-center rounded-lg border border-dashed">
               <BookOpen className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">{t.myLoans.noActiveLoans}</p>
-              <Link
-                href="/catalog"
-                className="text-xs text-primary hover:underline mt-1 inline-flex items-center gap-1"
-                data-testid="link-browse-catalog"
-              >
+              <Link href="/catalog" className="text-xs text-primary hover:underline mt-1 inline-flex items-center gap-1" data-testid="link-browse-catalog">
                 {t.myLoans.browseCatalog} <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -149,46 +191,26 @@ export default function MyLoansPage() {
               const isOverdue = isPast(new Date(loan.dueDate));
               const hasFine = (loan.fineAccrued ?? 0) > 0;
               return (
-                <Card
-                  key={loan.id}
-                  className={cn(
-                    "transition-all",
-                    isOverdue && "border-red-300 bg-red-50/40 shadow-sm shadow-red-100"
-                  )}
-                >
+                <Card key={loan.id} className={cn("transition-all", isOverdue && "border-red-300 bg-red-50/40 shadow-sm shadow-red-100")}>
                   <CardContent className="p-4 flex flex-col md:flex-row md:items-center gap-4">
-                    <div className={cn(
-                      "w-10 h-12 rounded flex items-center justify-center flex-shrink-0",
-                      isOverdue ? "bg-red-100" : "bg-gradient-to-br from-primary/10 to-primary/5"
-                    )}>
+                    <div className={cn("w-10 h-12 rounded flex items-center justify-center flex-shrink-0",
+                      isOverdue ? "bg-red-100" : "bg-gradient-to-br from-primary/10 to-primary/5")}>
                       <BookOpen className={cn("w-4 h-4", isOverdue ? "text-red-400" : "text-primary/40")} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <Link
-                        href={`/catalog/${loan.book?.id}`}
-                        className="font-medium hover:text-primary transition-colors line-clamp-1"
-                        data-testid={`loan-title-${loan.id}`}
-                      >
+                      <Link href={`/catalog/${loan.book?.id}`} className="font-medium hover:text-primary transition-colors line-clamp-1" data-testid={`loan-title-${loan.id}`}>
                         {loan.book?.title}
                       </Link>
                       <p className="text-xs text-muted-foreground mt-0.5">{loan.book?.author}</p>
                       <div className="flex flex-wrap items-center gap-3 mt-2">
                         <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1", dueStatus.color)}>
-                          <StatusIcon className="w-3 h-3" />
-                          {dueStatus.label}
+                          <StatusIcon className="w-3 h-3" />{dueStatus.label}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          {t.myLoans.borrowed} {formatLocalDate(loan.borrowedAt)}
-                        </span>
-                        {(loan.renewalsCount ?? 0) > 0 && (
-                          <span className="text-xs text-muted-foreground">
-                            {t.myLoans.renewals(loan.renewalsCount ?? 0)}
-                          </span>
-                        )}
+                        <span className="text-xs text-muted-foreground">{t.myLoans.borrowed} {formatLocalDate(loan.borrowedAt)}</span>
+                        {(loan.renewalsCount ?? 0) > 0 && <span className="text-xs text-muted-foreground">{t.myLoans.renewals(loan.renewalsCount ?? 0)}</span>}
                         {hasFine && (
                           <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 inline-flex items-center gap-1">
-                            <DollarSign className="w-3 h-3" />
-                            Fine: ${(loan.fineAccrued ?? 0).toFixed(2)}
+                            <DollarSign className="w-3 h-3" />Fine: ${(loan.fineAccrued ?? 0).toFixed(2)}
                           </span>
                         )}
                       </div>
@@ -213,6 +235,60 @@ export default function MyLoansPage() {
           )}
         </TabsContent>
 
+        {/* ── Reservations ─────────────────────────────────────────── */}
+        <TabsContent value="reservations" className="mt-4 space-y-3">
+          {reservationsLoading ? (
+            Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-lg" />)
+          ) : activeReservations.length === 0 ? (
+            <div className="py-12 text-center rounded-lg border border-dashed">
+              <Clock className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">{t.reservations.noReservations}</p>
+              <Link href="/catalog" className="text-xs text-primary hover:underline mt-1 inline-flex items-center gap-1">
+                Browse catalog <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+          ) : (
+            activeReservations.map(r => (
+              <Card key={r.id} className={cn(r.status === "READY" && "border-green-300 bg-green-50/30")}>
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className={cn("w-10 h-12 rounded flex items-center justify-center flex-shrink-0",
+                    r.status === "READY" ? "bg-green-100" : "bg-amber-50")}>
+                    <Clock className={cn("w-4 h-4", r.status === "READY" ? "text-green-500" : "text-amber-500")} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <Link href={`/catalog/${r.book?.id}`} className="font-medium hover:text-primary transition-colors line-clamp-1">
+                      {r.book?.title}
+                    </Link>
+                    <p className="text-xs text-muted-foreground mt-0.5">{r.book?.author}</p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <Badge variant={r.status === "READY" ? "default" : "secondary"} className="text-xs">
+                        {r.status === "READY" ? "Ready to pick up!" : t.reservations.queuePosition(r.queuePosition)}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        Reserved {format(new Date(r.createdAt), "MMM d")}
+                      </span>
+                      {r.expiresAt && (
+                        <span className="text-xs text-muted-foreground">
+                          · Expires {format(new Date(r.expiresAt), "MMM d")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => handleCancelReservation(r.id)}
+                    disabled={cancellingId === r.id}
+                  >
+                    {cancellingId === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t.reservations.cancelReservation}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+
         {/* ── Borrowing History ─────────────────────────────────────── */}
         <TabsContent value="history" className="mt-4 space-y-2">
           {isLoading ? (
@@ -232,13 +308,9 @@ export default function MyLoansPage() {
                   </div>
                   <div className="text-right text-xs text-muted-foreground flex-shrink-0">
                     <p>{t.myLoans.borrowed} {formatLocalDate(loan.borrowedAt, { month: "short", day: "numeric" })}</p>
-                    {loan.returnedAt && (
-                      <p>{t.myLoans.returned} {formatLocalDate(loan.returnedAt, { month: "short", day: "numeric", year: "numeric" })}</p>
-                    )}
+                    {loan.returnedAt && <p>{t.myLoans.returned} {formatLocalDate(loan.returnedAt, { month: "short", day: "numeric", year: "numeric" })}</p>}
                   </div>
-                  <Badge variant="outline" className="text-xs text-green-600 border-green-200">
-                    Returned
-                  </Badge>
+                  <Badge variant="outline" className="text-xs text-green-600 border-green-200">Returned</Badge>
                 </CardContent>
               </Card>
             ))
@@ -269,15 +341,10 @@ export default function MyLoansPage() {
                   <p className="text-3xl font-bold text-red-700 mt-0.5">${totalFine.toFixed(2)}</p>
                   <p className="text-xs text-red-500 mt-1">{t.fines.fineRate}</p>
                 </div>
-                <Button
-                  className="bg-red-600 hover:bg-red-700 text-white gap-2"
-                  onClick={() => setPayModalOpen(true)}
-                >
-                  <CreditCard className="w-4 h-4" />
-                  {t.fines.payNow}
+                <Button className="bg-red-600 hover:bg-red-700 text-white gap-2" onClick={() => setPayModalOpen(true)}>
+                  <CreditCard className="w-4 h-4" />{t.fines.payNow}
                 </Button>
               </div>
-
               <div className="space-y-2">
                 {finesData?.items?.map(item => (
                   <Card key={item.loanId} className="border-red-200">
@@ -287,9 +354,7 @@ export default function MyLoansPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{item.bookTitle}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Due {formatLocalDate(item.dueDate)} · {t.fines.daysOverdue(item.daysOverdue)}
-                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Due {formatLocalDate(item.dueDate)} · {t.fines.daysOverdue(item.daysOverdue)}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-sm font-bold text-red-600">${item.fineAmount.toFixed(2)}</p>
@@ -299,33 +364,20 @@ export default function MyLoansPage() {
                   </Card>
                 ))}
               </div>
-
               <Separator />
-
               <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <p className="text-sm font-semibold">{t.fines.total}</p>
                 <p className="text-lg font-bold">${totalFine.toFixed(2)}</p>
               </div>
-
-              <Button
-                className="w-full gap-2 bg-primary"
-                size="lg"
-                onClick={() => setPayModalOpen(true)}
-              >
-                <CreditCard className="w-4 h-4" />
-                {t.fines.clearFines} — ${totalFine.toFixed(2)}
+              <Button className="w-full gap-2 bg-primary" size="lg" onClick={() => setPayModalOpen(true)}>
+                <CreditCard className="w-4 h-4" />{t.fines.clearFines} — ${totalFine.toFixed(2)}
               </Button>
             </>
           )}
         </TabsContent>
       </Tabs>
 
-      <PaymentModal
-        open={payModalOpen}
-        onClose={() => setPayModalOpen(false)}
-        totalAmount={totalFine}
-        onSuccess={handlePaySuccess}
-      />
+      <PaymentModal open={payModalOpen} onClose={() => setPayModalOpen(false)} totalAmount={totalFine} onSuccess={handlePaySuccess} />
     </div>
   );
 }

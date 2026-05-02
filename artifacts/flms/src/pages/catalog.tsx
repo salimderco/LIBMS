@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
   useListBooks, getListBooksQueryKey,
@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   Search, BookOpen, ChevronLeft, ChevronRight,
-  BookMarked, Wifi, LayoutGrid, List, Sparkles, RefreshCw, X
+  BookMarked, Wifi, LayoutGrid, List, Sparkles, RefreshCw, X, Heart
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -47,10 +47,43 @@ export default function CatalogPage() {
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [wishlistIds, setWishlistIds] = useState<Set<number>>(new Set());
+  const [wishlistLoading, setWishlistLoading] = useState<Set<number>>(new Set());
 
   const canBorrow = user?.role === "STUDENT" || user?.role === "FACULTY";
-
   const debouncedQuery = useDebounce(query, 300);
+
+  useEffect(() => {
+    if (!token || !canBorrow) return;
+    fetch(`${apiBase}api/wishlist`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setWishlistIds(new Set((d.data ?? []).map((w: any) => w.bookId as number))))
+      .catch(() => {});
+  }, [token, canBorrow]);
+
+  const toggleWishlist = async (e: React.MouseEvent, bookId: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (wishlistLoading.has(bookId)) return;
+    setWishlistLoading(prev => new Set([...prev, bookId]));
+    try {
+      const resp = await fetch(`${apiBase}api/wishlist/${bookId}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await resp.json();
+      setWishlistIds(prev => {
+        const next = new Set(prev);
+        if (data.saved) { next.add(bookId); toast.success(t.wishlist.addedToWishlist); }
+        else { next.delete(bookId); toast.success(t.wishlist.removedFromWishlist); }
+        return next;
+      });
+    } catch {
+      toast.error("Wishlist update failed");
+    } finally {
+      setWishlistLoading(prev => { const n = new Set(prev); n.delete(bookId); return n; });
+    }
+  };
 
   const params = {
     ...(debouncedQuery && { q: debouncedQuery }),
@@ -61,24 +94,13 @@ export default function CatalogPage() {
     offset: (page - 1) * PAGE_SIZE,
   };
 
-  const { data, isLoading } = useListBooks(params, {
-    query: { queryKey: getListBooksQueryKey(params) }
-  });
+  const { data, isLoading } = useListBooks(params, { query: { queryKey: getListBooksQueryKey(params) } });
+  const { data: categories } = useListBookCategories({ query: { queryKey: getListBookCategoriesQueryKey() } });
 
-  const { data: categories } = useListBookCategories({
-    query: { queryKey: getListBookCategoriesQueryKey() }
-  });
-
-  const {
-    data: suggestionsData,
-    isFetching: suggestionsLoading,
-    refetch: fetchSuggestions,
-  } = useQuery<{ suggestions: AISuggestion[]; _fallback?: boolean }>({
+  const { data: suggestionsData, isFetching: suggestionsLoading, refetch: fetchSuggestions } = useQuery<{ suggestions: AISuggestion[]; _fallback?: boolean }>({
     queryKey: ["ai-suggestions"],
     queryFn: async () => {
-      const resp = await fetch(`${apiBase}api/ai/suggestions`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const resp = await fetch(`${apiBase}api/ai/suggestions`, { headers: { Authorization: `Bearer ${token}` } });
       if (!resp.ok) throw new Error("Suggestions unavailable");
       return resp.json();
     },
@@ -90,13 +112,9 @@ export default function CatalogPage() {
     setShowSuggestions(true);
     const result = await fetchSuggestions();
     if (result.data?._fallback) {
-      toast.info("Using library recommendations", {
-        description: "Personalized AI suggestions are unavailable — showing popular picks instead.",
-      });
+      toast.info("Using library recommendations", { description: "Personalized AI suggestions are unavailable — showing popular picks instead." });
     } else if (result.data?.suggestions?.length) {
-      toast.success("AI suggestions ready", {
-        description: "Based on your borrowing history.",
-      });
+      toast.success("AI suggestions ready", { description: "Based on your borrowing history." });
     }
   };
 
@@ -115,33 +133,16 @@ export default function CatalogPage() {
         </div>
         <div className="flex items-center gap-2">
           {canBorrow && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSuggest}
-              disabled={suggestionsLoading}
-              className="gap-1.5 text-xs"
-              data-testid="button-ai-suggestions"
-            >
-              {suggestionsLoading
-                ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                : <Sparkles className="w-3.5 h-3.5 text-amber-500" />}
+            <Button variant="outline" size="sm" onClick={handleSuggest} disabled={suggestionsLoading} className="gap-1.5 text-xs" data-testid="button-ai-suggestions">
+              {suggestionsLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-amber-500" />}
               {suggestionsLoading ? t.catalog.thinking : t.catalog.aiSuggestions}
             </Button>
           )}
           <div className="flex items-center gap-1 border rounded-md overflow-hidden">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={cn("p-2 transition-colors", viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
-              data-testid="button-grid-view"
-            >
+            <button onClick={() => setViewMode("grid")} className={cn("p-2 transition-colors", viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted")} data-testid="button-grid-view">
               <LayoutGrid className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={cn("p-2 transition-colors", viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
-              data-testid="button-list-view"
-            >
+            <button onClick={() => setViewMode("list")} className={cn("p-2 transition-colors", viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted")} data-testid="button-list-view">
               <List className="w-4 h-4" />
             </button>
           </div>
@@ -173,12 +174,7 @@ export default function CatalogPage() {
             ) : (
               <div className="grid sm:grid-cols-3 gap-3">
                 {suggestionsData.suggestions.map((s) => (
-                  <Link
-                    key={s.bookId}
-                    href={`/catalog/${s.bookId}`}
-                    className="block"
-                    data-testid={`suggestion-${s.bookId}`}
-                  >
+                  <Link key={s.bookId} href={`/catalog/${s.bookId}`} className="block" data-testid={`suggestion-${s.bookId}`}>
                     <div className="rounded-lg border border-amber-200 bg-white p-3 hover:shadow-sm transition-shadow h-full">
                       <div className="flex items-start gap-2 mb-1.5">
                         <div className="w-7 h-7 rounded bg-amber-100 flex items-center justify-center flex-shrink-0">
@@ -203,75 +199,37 @@ export default function CatalogPage() {
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder={t.catalog.searchPlaceholder}
-            className="pl-9"
-            value={query}
-            onChange={(e) => { setQuery(e.target.value); handleFilterChange(); }}
-            data-testid="input-search"
-          />
+          <Input placeholder={t.catalog.searchPlaceholder} className="pl-9" value={query} onChange={(e) => { setQuery(e.target.value); handleFilterChange(); }} data-testid="input-search" />
         </div>
-
         <Select value={category} onValueChange={(v) => { setCategory(v); handleFilterChange(); }}>
-          <SelectTrigger className="w-44" data-testid="select-category">
-            <SelectValue placeholder={t.catalog.allCategories} />
-          </SelectTrigger>
+          <SelectTrigger className="w-44" data-testid="select-category"><SelectValue placeholder={t.catalog.allCategories} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t.catalog.allCategories}</SelectItem>
-            {categories?.categories?.map(cat => (
-              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-            ))}
+            {categories?.categories?.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
           </SelectContent>
         </Select>
-
         <Select value={format} onValueChange={(v) => { setFormat(v); handleFilterChange(); }}>
-          <SelectTrigger className="w-36" data-testid="select-format">
-            <SelectValue placeholder={t.catalog.allFormats} />
-          </SelectTrigger>
+          <SelectTrigger className="w-36" data-testid="select-format"><SelectValue placeholder={t.catalog.allFormats} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t.catalog.allFormats}</SelectItem>
             <SelectItem value="PHYSICAL">{t.catalog.physical}</SelectItem>
             <SelectItem value="DIGITAL">{t.catalog.digital}</SelectItem>
           </SelectContent>
         </Select>
-
         <Select value={availability} onValueChange={(v) => { setAvailability(v); handleFilterChange(); }}>
-          <SelectTrigger className="w-40" data-testid="select-availability">
-            <SelectValue placeholder={t.catalog.anyAvailability} />
-          </SelectTrigger>
+          <SelectTrigger className="w-40" data-testid="select-availability"><SelectValue placeholder={t.catalog.anyAvailability} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t.catalog.anyAvailability}</SelectItem>
             <SelectItem value="available">{t.catalog.availableNow}</SelectItem>
           </SelectContent>
         </Select>
-
         <div className="flex items-center gap-1">
-          <Input
-            type="number"
-            placeholder={t.catalog.fromYear}
-            className="w-24 text-sm"
-            value={yearFrom}
-            onChange={(e) => { setYearFrom(e.target.value); handleFilterChange(); }}
-            data-testid="input-year-from"
-          />
+          <Input type="number" placeholder={t.catalog.fromYear} className="w-24 text-sm" value={yearFrom} onChange={(e) => { setYearFrom(e.target.value); handleFilterChange(); }} data-testid="input-year-from" />
           <span className="text-muted-foreground text-xs">–</span>
-          <Input
-            type="number"
-            placeholder={t.catalog.toYear}
-            className="w-24 text-sm"
-            value={yearTo}
-            onChange={(e) => { setYearTo(e.target.value); handleFilterChange(); }}
-            data-testid="input-year-to"
-          />
+          <Input type="number" placeholder={t.catalog.toYear} className="w-24 text-sm" value={yearTo} onChange={(e) => { setYearTo(e.target.value); handleFilterChange(); }} data-testid="input-year-to" />
         </div>
-
         {hasFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => { setQuery(""); setCategory("all"); setFormat("all"); setAvailability("all"); setYearFrom(""); setYearTo(""); setPage(1); }}
-            data-testid="button-clear-filters"
-          >
+          <Button variant="ghost" size="sm" onClick={() => { setQuery(""); setCategory("all"); setFormat("all"); setAvailability("all"); setYearFrom(""); setYearTo(""); setPage(1); }} data-testid="button-clear-filters">
             {t.catalog.clearFilters}
           </Button>
         )}
@@ -280,9 +238,7 @@ export default function CatalogPage() {
       {/* Results */}
       {isLoading ? (
         <div className={cn("grid gap-4", viewMode === "grid" ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4" : "grid-cols-1")}>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className={viewMode === "grid" ? "h-52" : "h-24"} />
-          ))}
+          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className={viewMode === "grid" ? "h-52" : "h-24"} />)}
         </div>
       ) : !data?.data?.length ? (
         <div className="text-center py-16">
@@ -314,21 +270,31 @@ export default function CatalogPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map(book => (
               <Link key={book.id} href={`/catalog/${book.id}`} className="block" data-testid={`book-card-${book.id}`}>
-                <Card className="hover-elevate h-full transition-shadow hover:shadow-md">
+                <Card className="hover-elevate h-full transition-shadow hover:shadow-md relative group">
                   <CardContent className="p-4 space-y-2">
-                    <div className="aspect-[3/4] rounded-md bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-3">
+                    <div className="aspect-[3/4] rounded-md bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-3 relative">
                       <BookOpen className="w-8 h-8 text-primary/30" />
+                      {canBorrow && (
+                        <button
+                          onClick={(e) => toggleWishlist(e, book.id)}
+                          className={cn(
+                            "absolute top-1.5 right-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all",
+                            "bg-white/80 hover:bg-white shadow-sm",
+                            "opacity-0 group-hover:opacity-100",
+                            wishlistIds.has(book.id) && "opacity-100"
+                          )}
+                          title={wishlistIds.has(book.id) ? t.wishlist.remove : t.wishlist.add}
+                        >
+                          <Heart className={cn("w-3.5 h-3.5 transition-colors", wishlistIds.has(book.id) ? "fill-rose-500 text-rose-500" : "text-muted-foreground")} />
+                        </button>
+                      )}
                     </div>
                     <div>
                       <p className="font-medium text-sm leading-tight line-clamp-2">{book.title}</p>
                       <p className="text-xs text-muted-foreground mt-0.5 truncate">{book.author}</p>
                     </div>
                     <div className="flex items-center justify-between pt-1">
-                      <Badge
-                        variant={book.availableCopies > 0 ? "default" : "secondary"}
-                        className="text-xs"
-                        data-testid={`badge-availability-${book.id}`}
-                      >
+                      <Badge variant={book.availableCopies > 0 ? "default" : "secondary"} className="text-xs" data-testid={`badge-availability-${book.id}`}>
                         {book.availableCopies > 0 ? t.catalog.avail(book.availableCopies) : t.catalog.unavailable}
                       </Badge>
                       {book.format === "DIGITAL"
@@ -362,6 +328,15 @@ export default function CatalogPage() {
                     <Badge variant={book.availableCopies > 0 ? "default" : "secondary"} className="text-xs whitespace-nowrap">
                       {book.availableCopies > 0 ? `${book.availableCopies}/${book.totalCopies}` : t.catalog.unavailable}
                     </Badge>
+                    {canBorrow && (
+                      <button
+                        onClick={(e) => toggleWishlist(e, book.id)}
+                        className="p-1.5 rounded hover:bg-muted transition-colors"
+                        title={wishlistIds.has(book.id) ? t.wishlist.remove : t.wishlist.add}
+                      >
+                        <Heart className={cn("w-4 h-4", wishlistIds.has(book.id) ? "fill-rose-500 text-rose-500" : "text-muted-foreground")} />
+                      </button>
+                    )}
                   </CardContent>
                 </Card>
               </Link>

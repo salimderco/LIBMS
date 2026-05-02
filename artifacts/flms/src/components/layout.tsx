@@ -1,13 +1,15 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useI18n, LANGUAGES } from "@/lib/i18n";
+import { useTheme } from "@/lib/theme";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useLogout } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard, BookOpen, Library, ClipboardList, Users,
-  BookMarked, LogOut, User, Menu, X, ChevronRight, Globe
+  BookMarked, LogOut, User, Menu, X, ChevronRight, Globe,
+  Heart, Megaphone, Activity, BarChart2, Settings, Sun, Moon
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -17,8 +19,13 @@ const NAV_KEYS = [
   { href: "/", key: "dashboard" as const, icon: LayoutDashboard, roles: ["STUDENT", "FACULTY", "LIBRARIAN", "ADMIN"] },
   { href: "/catalog", key: "catalog" as const, icon: BookOpen, roles: ["STUDENT", "FACULTY", "LIBRARIAN", "ADMIN"] },
   { href: "/my-loans", key: "myLoans" as const, icon: BookMarked, roles: ["STUDENT", "FACULTY"] },
+  { href: "/wishlist", key: "wishlist" as const, icon: Heart, roles: ["STUDENT", "FACULTY"] },
   { href: "/catalog-management", key: "catalogManagement" as const, icon: Library, roles: ["LIBRARIAN", "ADMIN"] },
   { href: "/all-loans", key: "allLoans" as const, icon: ClipboardList, roles: ["LIBRARIAN", "ADMIN"] },
+  { href: "/announcements-admin", key: "announcements" as const, icon: Megaphone, roles: ["LIBRARIAN", "ADMIN"] },
+  { href: "/audit-log", key: "auditLog" as const, icon: Activity, roles: ["LIBRARIAN", "ADMIN"] },
+  { href: "/reports", key: "reports" as const, icon: BarChart2, roles: ["LIBRARIAN", "ADMIN"] },
+  { href: "/loan-policy", key: "loanPolicy" as const, icon: Settings, roles: ["ADMIN"] },
   { href: "/users", key: "userManagement" as const, icon: Users, roles: ["ADMIN"] },
   { href: "/profile", key: "myProfile" as const, icon: User, roles: ["STUDENT", "FACULTY", "LIBRARIAN", "ADMIN"] },
 ];
@@ -33,6 +40,7 @@ const ROLE_COLORS: Record<string, string> = {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const { t, lang, setLang, dir } = useI18n();
+  const { theme, toggleTheme } = useTheme();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
@@ -43,20 +51,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
-      onSettled: () => {
-        queryClient.clear();
-        logout();
-      }
+      onSettled: () => { queryClient.clear(); logout(); }
     });
   };
 
   const initials = user?.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() ?? "U";
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
-    <div className={cn(
-      "flex flex-col h-full bg-sidebar border-r border-sidebar-border",
-      mobile ? "w-full" : "w-64"
-    )}>
+    <div className={cn("flex flex-col h-full bg-sidebar border-r border-sidebar-border", mobile ? "w-full" : "w-64")}>
       <div className="px-6 py-5 border-b border-sidebar-border">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
@@ -97,14 +99,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </nav>
 
       <div className="px-3 py-4 border-t border-sidebar-border space-y-2">
-        <div className={cn(
-          "flex items-center gap-3 px-3 py-2 rounded-md bg-sidebar-accent",
-          dir === "rtl" && "flex-row-reverse"
-        )}>
+        <div className={cn("flex items-center gap-3 px-3 py-2 rounded-md bg-sidebar-accent", dir === "rtl" && "flex-row-reverse")}>
           <Avatar className="w-8 h-8">
-            <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-              {initials}
-            </AvatarFallback>
+            <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">{initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className={cn("text-sm font-medium text-sidebar-foreground truncate", dir === "rtl" && "text-right")}>{user?.name}</p>
@@ -113,6 +110,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </span>
           </div>
         </div>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn("w-full justify-start gap-2 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent", dir === "rtl" && "flex-row-reverse")}
+          onClick={toggleTheme}
+        >
+          {theme === "dark"
+            ? <Sun className="w-4 h-4 flex-shrink-0" />
+            : <Moon className="w-4 h-4 flex-shrink-0" />}
+          <span className="flex-1 text-start">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+        </Button>
 
         <div className="relative">
           <Button
@@ -125,9 +134,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="flex-1 text-start">{t.nav.language}: {LANGUAGES.find(l => l.code === lang)?.nativeLabel}</span>
           </Button>
           {langOpen && (
-            <div className={cn(
-              "absolute bottom-full mb-1 left-0 right-0 bg-card border border-border rounded-lg shadow-lg overflow-hidden z-50",
-            )}>
+            <div className={cn("absolute bottom-full mb-1 left-0 right-0 bg-card border border-border rounded-lg shadow-lg overflow-hidden z-50")}>
               {LANGUAGES.map(l => (
                 <button
                   key={l.code}
@@ -162,12 +169,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background" dir={dir}>
-      {/* Desktop sidebar */}
       <div className={cn("hidden lg:flex flex-shrink-0", dir === "rtl" && "order-last")}>
         <Sidebar />
       </div>
 
-      {/* Mobile sidebar overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
@@ -177,34 +182,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Mobile header */}
-        <div className={cn(
-          "lg:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-card",
-          dir === "rtl" && "flex-row-reverse"
-        )}>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            data-testid="button-menu"
-          >
+        <div className={cn("lg:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-card", dir === "rtl" && "flex-row-reverse")}>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMobileOpen(!mobileOpen)} data-testid="button-menu">
             {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </Button>
           <div className={cn("flex items-center gap-2 flex-1", dir === "rtl" && "flex-row-reverse")}>
             <BookOpen className="w-4 h-4 text-primary" />
             <span className="font-serif text-sm font-semibold">Faculty Library</span>
           </div>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleTheme}>
+            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </Button>
           <NotificationBell />
         </div>
 
-        {/* Desktop top bar (notification bell only) */}
-        <div className={cn(
-          "hidden lg:flex items-center justify-end px-6 py-2 border-b border-border/50 bg-background/80 backdrop-blur-sm",
-          dir === "rtl" && "flex-row-reverse"
-        )}>
+        <div className={cn("hidden lg:flex items-center justify-end px-6 py-2 border-b border-border/50 bg-background/80 backdrop-blur-sm gap-2", dir === "rtl" && "flex-row-reverse")}>
           <NotificationBell />
         </div>
 

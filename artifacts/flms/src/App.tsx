@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { I18nProvider } from "@/lib/i18n";
+import { ThemeProvider } from "@/lib/theme";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
@@ -16,6 +17,11 @@ import CatalogManagementPage from "@/pages/catalog-management";
 import AllLoansPage from "@/pages/all-loans";
 import UsersPage from "@/pages/users";
 import ProfilePage from "@/pages/profile";
+import WishlistPage from "@/pages/wishlist";
+import AnnouncementsAdminPage from "@/pages/announcements-admin";
+import AuditLogPage from "@/pages/audit-log";
+import ReportsPage from "@/pages/reports";
+import LoanPolicyPage from "@/pages/loan-policy";
 import AppLayout from "@/components/layout";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -43,9 +49,7 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?
   }
   if (!token || !user) return <Redirect to="/login" />;
   if (roles && !roles.includes(user.role)) {
-    toast.error("Access denied", {
-      description: "You don't have permission to view that page.",
-    });
+    toast.error("Access denied", { description: "You don't have permission to view that page." });
     return <Redirect to="/" />;
   }
   return <>{children}</>;
@@ -75,14 +79,10 @@ function Router() {
         {token && user ? <Redirect to="/" /> : <RegisterPage />}
       </Route>
       <Route path="/">
-        <ProtectedRoute>
-          <AppLayout><DashboardPage /></AppLayout>
-        </ProtectedRoute>
+        <ProtectedRoute><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>
       </Route>
       <Route path="/catalog">
-        <ProtectedRoute>
-          <AppLayout><CatalogPage /></AppLayout>
-        </ProtectedRoute>
+        <ProtectedRoute><AppLayout><CatalogPage /></AppLayout></ProtectedRoute>
       </Route>
       <Route path="/catalog/:bookId">
         {(params) => (
@@ -92,29 +92,34 @@ function Router() {
         )}
       </Route>
       <Route path="/my-loans">
-        <ProtectedRoute roles={["STUDENT", "FACULTY"]}>
-          <AppLayout><MyLoansPage /></AppLayout>
-        </ProtectedRoute>
+        <ProtectedRoute roles={["STUDENT", "FACULTY"]}><AppLayout><MyLoansPage /></AppLayout></ProtectedRoute>
+      </Route>
+      <Route path="/wishlist">
+        <ProtectedRoute roles={["STUDENT", "FACULTY"]}><AppLayout><WishlistPage /></AppLayout></ProtectedRoute>
       </Route>
       <Route path="/catalog-management">
-        <ProtectedRoute roles={["LIBRARIAN", "ADMIN"]}>
-          <AppLayout><CatalogManagementPage /></AppLayout>
-        </ProtectedRoute>
+        <ProtectedRoute roles={["LIBRARIAN", "ADMIN"]}><AppLayout><CatalogManagementPage /></AppLayout></ProtectedRoute>
       </Route>
       <Route path="/all-loans">
-        <ProtectedRoute roles={["LIBRARIAN", "ADMIN"]}>
-          <AppLayout><AllLoansPage /></AppLayout>
-        </ProtectedRoute>
+        <ProtectedRoute roles={["LIBRARIAN", "ADMIN"]}><AppLayout><AllLoansPage /></AppLayout></ProtectedRoute>
+      </Route>
+      <Route path="/announcements-admin">
+        <ProtectedRoute roles={["LIBRARIAN", "ADMIN"]}><AppLayout><AnnouncementsAdminPage /></AppLayout></ProtectedRoute>
+      </Route>
+      <Route path="/audit-log">
+        <ProtectedRoute roles={["LIBRARIAN", "ADMIN"]}><AppLayout><AuditLogPage /></AppLayout></ProtectedRoute>
+      </Route>
+      <Route path="/reports">
+        <ProtectedRoute roles={["LIBRARIAN", "ADMIN"]}><AppLayout><ReportsPage /></AppLayout></ProtectedRoute>
+      </Route>
+      <Route path="/loan-policy">
+        <ProtectedRoute roles={["ADMIN"]}><AppLayout><LoanPolicyPage /></AppLayout></ProtectedRoute>
       </Route>
       <Route path="/users">
-        <ProtectedRoute roles={["ADMIN"]}>
-          <AppLayout><UsersPage /></AppLayout>
-        </ProtectedRoute>
+        <ProtectedRoute roles={["ADMIN"]}><AppLayout><UsersPage /></AppLayout></ProtectedRoute>
       </Route>
       <Route path="/profile">
-        <ProtectedRoute>
-          <AppLayout><ProfilePage /></AppLayout>
-        </ProtectedRoute>
+        <ProtectedRoute><AppLayout><ProfilePage /></AppLayout></ProtectedRoute>
       </Route>
       <Route component={NotFound} />
     </Switch>
@@ -124,16 +129,18 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <I18nProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AuthProvider>
-              <Router />
-            </AuthProvider>
-          </WouterRouter>
-          <Toaster richColors closeButton position="top-right" />
-        </TooltipProvider>
-      </I18nProvider>
+      <ThemeProvider>
+        <I18nProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <AuthProvider>
+                <Router />
+              </AuthProvider>
+            </WouterRouter>
+            <Toaster richColors closeButton position="top-right" />
+          </TooltipProvider>
+        </I18nProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

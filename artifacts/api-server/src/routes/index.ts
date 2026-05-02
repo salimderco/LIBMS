@@ -8,6 +8,12 @@ import dashboardRouter from "./dashboard.js";
 import aiRouter from "./ai.js";
 import finesRouter from "./fines.js";
 import notificationsRouter from "./notifications.js";
+import reservationsRouter from "./reservations.js";
+import reviewsRouter from "./reviews.js";
+import wishlistRouter from "./wishlist.js";
+import announcementsRouter from "./announcements.js";
+import loanPolicyRouter from "./loan-policy.js";
+import reportsRouter from "./reports.js";
 
 const router: IRouter = Router();
 
@@ -20,5 +26,11 @@ router.use(dashboardRouter);
 router.use(aiRouter);
 router.use(finesRouter);
 router.use(notificationsRouter);
+router.use(reservationsRouter);
+router.use(reviewsRouter);
+router.use(wishlistRouter);
+router.use(announcementsRouter);
+router.use(loanPolicyRouter);
+router.use(reportsRouter);
 
 export default router;

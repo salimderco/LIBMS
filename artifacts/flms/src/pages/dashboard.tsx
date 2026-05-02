@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import {
   useGetDashboardSummary, getGetDashboardSummaryQueryKey,
@@ -10,13 +11,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import {
   BookOpen, Users, ClipboardList, AlertTriangle,
-  BookMarked, TrendingUp, Activity, ArrowRight
+  BookMarked, TrendingUp, Activity, ArrowRight, Megaphone, Pin, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { useI18n } from "@/lib/i18n";
 
 const ACTION_COLORS: Record<string, string> = {
@@ -35,10 +34,43 @@ const CHART_COLORS = [
   "hsl(var(--primary) / 0.40)",
 ];
 
+interface Announcement {
+  id: number;
+  title: string;
+  content: string;
+  isPinned: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { t } = useI18n();
   const isStaff = user?.role === "LIBRARIAN" || user?.role === "ADMIN";
+  const baseUrl = import.meta.env.BASE_URL;
+  const apiBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [dismissedIds, setDismissedIds] = useState<Set<number>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("flms_dismissed_announcements") ?? "[]")); }
+    catch { return new Set(); }
+  });
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${apiBase}api/announcements`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setAnnouncements(d.data ?? []))
+      .catch(() => {});
+  }, [token]);
+
+  const dismiss = (id: number) => {
+    const updated = new Set([...dismissedIds, id]);
+    setDismissedIds(updated);
+    localStorage.setItem("flms_dismissed_announcements", JSON.stringify([...updated]));
+  };
+
+  const visibleAnnouncements = announcements.filter(a => !dismissedIds.has(a.id)).slice(0, 3);
 
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary({
     query: { queryKey: getGetDashboardSummaryQueryKey() }
@@ -83,6 +115,39 @@ export default function DashboardPage() {
         <p className="text-sm text-muted-foreground mt-0.5">{t.dashboard.subtitle}</p>
       </div>
 
+      {/* Announcements banner */}
+      {visibleAnnouncements.length > 0 && (
+        <div className="space-y-2">
+          {visibleAnnouncements.map(a => (
+            <div
+              key={a.id}
+              className={cn(
+                "flex items-start gap-3 p-3 rounded-lg border",
+                a.isPinned
+                  ? "bg-primary/5 border-primary/20"
+                  : "bg-amber-50/60 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800"
+              )}
+            >
+              <div className="flex items-start gap-2 flex-1 min-w-0">
+                {a.isPinned
+                  ? <Pin className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                  : <Megaphone className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{a.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.content}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => dismiss(a.id)}
+                className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((card) => {
@@ -93,9 +158,7 @@ export default function DashboardPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{card.label}</p>
-                    {summaryLoading ? (
-                      <Skeleton className="h-7 w-12 mt-1" />
-                    ) : (
+                    {summaryLoading ? <Skeleton className="h-7 w-12 mt-1" /> : (
                       <p className="text-2xl font-semibold mt-1">{card.value ?? 0}</p>
                     )}
                   </div>
@@ -117,34 +180,15 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {popularLoading ? (
-              <Skeleton className="h-48 w-full" />
-            ) : chartData.length === 0 ? (
+            {popularLoading ? <Skeleton className="h-48 w-full" /> : chartData.length === 0 ? (
               <div className="h-48 flex items-center justify-center">
                 <p className="text-sm text-muted-foreground">{t.dashboard.noBorrowingData}</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart
-                  data={chartData}
-                  layout="vertical"
-                  margin={{ top: 4, right: 24, bottom: 4, left: 8 }}
-                >
-                  <XAxis
-                    type="number"
-                    allowDecimals={false}
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="title"
-                    width={140}
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
+                <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }}>
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="title" width={140} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <Tooltip
                     cursor={{ fill: "hsl(var(--muted))" }}
                     content={({ active, payload }) => {
@@ -158,9 +202,7 @@ export default function DashboardPage() {
                     }}
                   />
                   <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={28}>
-                    {chartData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}
+                    {chartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -170,7 +212,6 @@ export default function DashboardPage() {
       )}
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Popular books */}
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -178,11 +219,7 @@ export default function DashboardPage() {
                 <TrendingUp className="w-4 h-4 text-primary" />
                 {t.dashboard.popularBooks}
               </CardTitle>
-              <Link
-                href="/catalog"
-                className="text-xs text-primary hover:underline flex items-center gap-1"
-                data-testid="link-view-catalog"
-              >
+              <Link href="/catalog" className="text-xs text-primary hover:underline flex items-center gap-1" data-testid="link-view-catalog">
                 {t.dashboard.viewAll} <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -192,30 +229,18 @@ export default function DashboardPage() {
               Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 py-2">
                   <Skeleton className="w-8 h-8 rounded" />
-                  <div className="flex-1 space-y-1">
-                    <Skeleton className="h-3 w-3/4" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </div>
+                  <div className="flex-1 space-y-1"><Skeleton className="h-3 w-3/4" /><Skeleton className="h-3 w-1/2" /></div>
                 </div>
               ))
             ) : popularBooks?.data?.length ? (
               popularBooks.data.map((item, i) => (
-                <Link
-                  key={item.book?.id ?? i}
-                  href={`/catalog/${item.book?.id}`}
-                  className="flex items-center gap-3 py-2 rounded-md hover:bg-accent px-2 -mx-2 transition-colors"
-                  data-testid={`popular-book-${i}`}
-                >
-                  <div className="w-7 h-7 rounded bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                    {i + 1}
-                  </div>
+                <Link key={item.book?.id ?? i} href={`/catalog/${item.book?.id}`} className="flex items-center gap-3 py-2 rounded-md hover:bg-accent px-2 -mx-2 transition-colors" data-testid={`popular-book-${i}`}>
+                  <div className="w-7 h-7 rounded bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold flex-shrink-0">{i + 1}</div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{item.book?.title}</p>
                     <p className="text-xs text-muted-foreground truncate">{item.book?.author}</p>
                   </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {item.borrowCount}×
-                  </span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{item.borrowCount}×</span>
                 </Link>
               ))
             ) : (
@@ -224,7 +249,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Recent activity (staff) / my loans status (student/faculty) */}
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -233,11 +257,7 @@ export default function DashboardPage() {
                 {isStaff ? t.dashboard.recentActivity : t.dashboard.myOutstandingLoans}
               </CardTitle>
               {!isStaff && (
-                <Link
-                  href="/my-loans"
-                  className="text-xs text-primary hover:underline flex items-center gap-1"
-                  data-testid="link-view-loans"
-                >
+                <Link href="/my-loans" className="text-xs text-primary hover:underline flex items-center gap-1" data-testid="link-view-loans">
                   {t.dashboard.viewAll} <ArrowRight className="w-3 h-3" />
                 </Link>
               )}
@@ -249,10 +269,7 @@ export default function DashboardPage() {
                 Array.from({ length: 5 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-3 py-1.5">
                     <Skeleton className="h-6 w-16 rounded-full" />
-                    <div className="flex-1 space-y-1">
-                      <Skeleton className="h-3 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
-                    </div>
+                    <div className="flex-1 space-y-1"><Skeleton className="h-3 w-3/4" /><Skeleton className="h-3 w-1/2" /></div>
                   </div>
                 ))
               ) : recentActivity?.data?.length ? (
@@ -278,23 +295,17 @@ export default function DashboardPage() {
                 <div className="py-6 text-center">
                   <BookMarked className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">{t.dashboard.noActiveLoans}</p>
-                  <Link href="/catalog" className="text-xs text-primary hover:underline mt-1 inline-block">
-                    {t.dashboard.browseCatalog}
-                  </Link>
+                  <Link href="/catalog" className="text-xs text-primary hover:underline mt-1 inline-block">{t.dashboard.browseCatalog}</Link>
                 </div>
               ) : (
                 <div className="space-y-2 py-2">
                   {(summary?.myOverdueLoans ?? 0) > 0 && (
                     <div className="flex items-center gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/20">
                       <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />
-                      <p className="text-sm text-destructive font-medium">
-                        {t.dashboard.overdueCount(summary?.myOverdueLoans ?? 0)}
-                      </p>
+                      <p className="text-sm text-destructive font-medium">{t.dashboard.overdueCount(summary?.myOverdueLoans ?? 0)}</p>
                     </div>
                   )}
-                  <p className="text-sm text-muted-foreground">
-                    {t.dashboard.activeCount(summary?.myActiveLoans ?? 0)}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t.dashboard.activeCount(summary?.myActiveLoans ?? 0)}</p>
                 </div>
               )
             )}

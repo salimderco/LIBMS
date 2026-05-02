@@ -196,7 +196,44 @@ function BookForm({
         </div>
         <div className="space-y-1">
           <Label>ISBN *</Label>
-          <Input {...form.register("isbn")} placeholder="978-..." data-testid="input-isbn" />
+          <div className="flex gap-2">
+            <Input {...form.register("isbn")} placeholder="978-..." data-testid="input-isbn" className="flex-1" />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={enriching}
+              className="flex-shrink-0 gap-1.5 text-xs"
+              title="Look up book details by ISBN"
+              onClick={async () => {
+                const isbn = form.getValues("isbn");
+                if (!isbn) { toast.error("Enter an ISBN first"); return; }
+                setEnriching(true);
+                try {
+                  const resp = await fetch(`${baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`}api/books/isbn-lookup?isbn=${encodeURIComponent(isbn)}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  if (!resp.ok) throw new Error((await resp.json()).message ?? "ISBN lookup failed");
+                  const data = await resp.json();
+                  if (data.title) form.setValue("title", data.title);
+                  if (data.author) form.setValue("author", data.author);
+                  if (data.publisher) form.setValue("publisher", data.publisher);
+                  if (data.publicationYear) form.setValue("publicationYear", data.publicationYear);
+                  if (data.description) form.setValue("description", data.description);
+                  if (data.category) form.setValue("category", data.category);
+                  if (Array.isArray(data.tags)) form.setValue("tags", data.tags.join(", "));
+                  toast.success("ISBN lookup complete", { description: data.title ?? "Book details filled in." });
+                } catch (err: any) {
+                  toast.error("ISBN lookup failed", { description: err?.message });
+                } finally {
+                  setEnriching(false);
+                }
+              }}
+            >
+              {enriching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span className="text-xs">🔍</span>}
+              {enriching ? "Looking up..." : "Lookup"}
+            </Button>
+          </div>
           {form.formState.errors.isbn && <p className="text-xs text-destructive">{form.formState.errors.isbn.message}</p>}
         </div>
         <div className="space-y-1">

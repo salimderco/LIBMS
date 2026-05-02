@@ -3,3 +3,8 @@ export * from "./books";
 export * from "./loans";
 export * from "./activity-logs";
 export * from "./notifications";
+export * from "./reservations";
+export * from "./reviews";
+export * from "./wishlists";
+export * from "./announcements";
+export * from "./loan-policy";

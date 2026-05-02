@@ -45,6 +45,29 @@ router.get("/books", authenticate as any, async (req: AuthRequest, res) => {
   });
 });
 
+router.get("/books/isbn-lookup", authenticate as any, async (req, res) => {
+  const { isbn } = req.query as { isbn?: string };
+  if (!isbn) return res.status(400).json({ error: "Validation", message: "isbn query param required" });
+  try {
+    const resp = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(isbn)}&maxResults=1`);
+    const json = await resp.json() as any;
+    const item = json.items?.[0];
+    if (!item) return res.status(404).json({ error: "NotFound", message: "No book found for that ISBN" });
+    const info = item.volumeInfo ?? {};
+    res.json({
+      title: info.title ?? "",
+      author: (info.authors ?? []).join(", "),
+      publisher: info.publisher ?? "",
+      publicationYear: info.publishedDate ? parseInt(info.publishedDate.slice(0, 4)) : null,
+      description: info.description ?? "",
+      category: info.categories?.[0] ?? "",
+      coverImage: info.imageLinks?.thumbnail?.replace("http://", "https://") ?? null,
+    });
+  } catch {
+    res.status(503).json({ error: "ExternalError", message: "Could not reach Google Books API" });
+  }
+});
+
 router.get("/books/categories", authenticate as any, async (_req, res) => {
   const rows = await db.selectDistinct({ category: booksTable.category }).from(booksTable).orderBy(booksTable.category);
   res.json({ categories: rows.map(r => r.category) });
