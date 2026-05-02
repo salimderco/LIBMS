@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { loansTable, booksTable, usersTable, activityLogsTable } from "@workspace/db";
+import { loansTable, booksTable, usersTable, activityLogsTable, notificationsTable } from "@workspace/db";
 import { eq, and, count, sql } from "drizzle-orm";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate.js";
 
@@ -11,6 +11,7 @@ const FACULTY_LOAN_DAYS = 30;
 const STUDENT_QUOTA = 5;
 const FACULTY_QUOTA = 10;
 const MAX_RENEWALS = 2;
+const FINE_PER_DAY = 0.50;
 
 function getLoanDays(role: string): number {
   return role === "FACULTY" ? FACULTY_LOAN_DAYS : STUDENT_LOAN_DAYS;
@@ -26,10 +27,23 @@ function computeStatus(loan: typeof loansTable.$inferSelect): "ACTIVE" | "RETURN
   return "ACTIVE";
 }
 
+function computeFineAmount(loan: typeof loansTable.$inferSelect): number {
+  if (loan.returnedAt) return 0;
+  const now = new Date();
+  const effectiveStart = loan.finePaidAt && loan.finePaidAt > loan.dueDate
+    ? loan.finePaidAt
+    : loan.dueDate;
+  if (now <= effectiveStart) return 0;
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const daysOverdue = Math.floor((now.getTime() - effectiveStart.getTime()) / msPerDay);
+  return Math.max(0, daysOverdue * FINE_PER_DAY);
+}
+
 async function serializeLoan(loan: typeof loansTable.$inferSelect) {
   const [book] = await db.select().from(booksTable).where(eq(booksTable.id, loan.bookId)).limit(1);
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, loan.userId)).limit(1);
   const status = computeStatus(loan);
+  const fineAccrued = computeFineAmount(loan);
   return {
     id: loan.id,
     userId: loan.userId,
@@ -49,11 +63,75 @@ async function serializeLoan(loan: typeof loansTable.$inferSelect) {
     returnedAt: loan.returnedAt,
     renewalsCount: loan.renewalsCount,
     status,
+    fineAccrued,
+    finePaidAt: loan.finePaidAt ?? null,
   };
 }
 
+async function ensureDueSoonNotifications(userId: number, loans: (typeof loansTable.$inferSelect)[]) {
+  const now = new Date();
+  const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+  for (const loan of loans) {
+    if (loan.returnedAt) continue;
+    const dueDate = new Date(loan.dueDate);
+    if (dueDate > now && dueDate <= in48h) {
+      const existing = await db
+        .select()
+        .from(notificationsTable)
+        .where(
+          and(
+            eq(notificationsTable.userId, userId),
+            eq(notificationsTable.type, "DUE_SOON"),
+            eq(notificationsTable.relatedLoanId as any, loan.id)
+          )
+        )
+        .limit(1);
+      if (existing.length === 0) {
+        const [book] = await db.select().from(booksTable).where(eq(booksTable.id, loan.bookId)).limit(1);
+        const hoursLeft = Math.round((dueDate.getTime() - now.getTime()) / (60 * 60 * 1000));
+        await db.insert(notificationsTable).values({
+          userId,
+          type: "DUE_SOON",
+          title: "Book Due Soon",
+          message: `"${book?.title ?? "A book"}" is due in ${hoursLeft} hour${hoursLeft !== 1 ? "s" : ""}. Return or renew before it's overdue.`,
+          relatedLoanId: loan.id,
+        });
+      }
+    }
+    if (dueDate < now && computeFineAmount(loan) > 0) {
+      const existing = await db
+        .select()
+        .from(notificationsTable)
+        .where(
+          and(
+            eq(notificationsTable.userId, userId),
+            eq(notificationsTable.type, "OVERDUE_FINE"),
+            eq(notificationsTable.relatedLoanId as any, loan.id)
+          )
+        )
+        .limit(1);
+      const fine = computeFineAmount(loan);
+      if (existing.length === 0 || fine > 0) {
+        if (existing.length === 0) {
+          const [book] = await db.select().from(booksTable).where(eq(booksTable.id, loan.bookId)).limit(1);
+          await db.insert(notificationsTable).values({
+            userId,
+            type: "OVERDUE_FINE",
+            title: "Overdue Fine Accruing",
+            message: `"${book?.title ?? "A book"}" is overdue. A fine of $${fine.toFixed(2)} has accrued at $0.50/day.`,
+            relatedLoanId: loan.id,
+          });
+        }
+      }
+    }
+  }
+}
+
 router.get("/loans/my", authenticate as any, async (req: AuthRequest, res) => {
-  const allLoans = await db.select().from(loansTable).where(eq(loansTable.userId, req.user!.id)).orderBy(loansTable.borrowedAt);
+  const userId = req.user!.id;
+  const allLoans = await db.select().from(loansTable).where(eq(loansTable.userId, userId)).orderBy(loansTable.borrowedAt);
+  await ensureDueSoonNotifications(userId, allLoans);
   const serialized = await Promise.all(allLoans.map(serializeLoan));
   const active = serialized.filter(l => l.status === "ACTIVE" || l.status === "OVERDUE");
   const history = serialized.filter(l => l.status === "RETURNED");
@@ -222,4 +300,5 @@ router.post("/loans/:loanId/renew", authenticate as any, async (req: AuthRequest
   res.json(serialized);
 });
 
+export { computeFineAmount };
 export default router;

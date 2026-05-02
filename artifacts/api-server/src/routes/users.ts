@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
+import { usersTable, notificationsTable } from "@workspace/db";
 import { eq, like, or, count } from "drizzle-orm";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate.js";
 
@@ -47,11 +47,27 @@ router.get("/users/:userId", authenticate as any, requireRole("ADMIN") as any, a
 
 router.patch("/users/:userId", authenticate as any, requireRole("ADMIN") as any, async (req, res) => {
   const { role, isActive } = req.body;
+  const targetId = parseInt(req.params.userId);
+
+  const [before] = await db.select().from(usersTable).where(eq(usersTable.id, targetId)).limit(1);
+  if (!before) return res.status(404).json({ error: "NotFound", message: "User not found" });
+
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (role !== undefined) updates.role = role;
   if (isActive !== undefined) updates.isActive = isActive;
-  const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, parseInt(req.params.userId))).returning();
+
+  const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, targetId)).returning();
   if (!updated) return res.status(404).json({ error: "NotFound", message: "User not found" });
+
+  if (role !== undefined && role !== before.role) {
+    await db.insert(notificationsTable).values({
+      userId: targetId,
+      type: "ROLE_CHANGED",
+      title: "Your role has been updated",
+      message: `Your account role has been changed from ${before.role} to ${role} by an administrator.`,
+    });
+  }
+
   res.json(serializeUser(updated));
 });
 

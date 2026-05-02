@@ -360,6 +360,10 @@ export const ListAllLoansResponse = zod.object({
       returnedAt: zod.coerce.date().nullish(),
       renewalsCount: zod.number(),
       status: zod.enum(["ACTIVE", "RETURNED", "OVERDUE"]),
+      fineAccrued: zod
+        .number()
+        .describe("Current outstanding fine in USD ($0.50\/day overdue)"),
+      finePaidAt: zod.coerce.date().nullish(),
     }),
   ),
   page: zod.number(),
@@ -414,6 +418,10 @@ export const GetMyLoansResponse = zod.object({
       returnedAt: zod.coerce.date().nullish(),
       renewalsCount: zod.number(),
       status: zod.enum(["ACTIVE", "RETURNED", "OVERDUE"]),
+      fineAccrued: zod
+        .number()
+        .describe("Current outstanding fine in USD ($0.50\/day overdue)"),
+      finePaidAt: zod.coerce.date().nullish(),
     }),
   ),
   history: zod.array(
@@ -458,6 +466,10 @@ export const GetMyLoansResponse = zod.object({
       returnedAt: zod.coerce.date().nullish(),
       renewalsCount: zod.number(),
       status: zod.enum(["ACTIVE", "RETURNED", "OVERDUE"]),
+      fineAccrued: zod
+        .number()
+        .describe("Current outstanding fine in USD ($0.50\/day overdue)"),
+      finePaidAt: zod.coerce.date().nullish(),
     }),
   ),
 });
@@ -517,6 +529,10 @@ export const ReturnLoanResponse = zod.object({
   returnedAt: zod.coerce.date().nullish(),
   renewalsCount: zod.number(),
   status: zod.enum(["ACTIVE", "RETURNED", "OVERDUE"]),
+  fineAccrued: zod
+    .number()
+    .describe("Current outstanding fine in USD ($0.50\/day overdue)"),
+  finePaidAt: zod.coerce.date().nullish(),
 });
 
 /**
@@ -567,6 +583,89 @@ export const RenewLoanResponse = zod.object({
   returnedAt: zod.coerce.date().nullish(),
   renewalsCount: zod.number(),
   status: zod.enum(["ACTIVE", "RETURNED", "OVERDUE"]),
+  fineAccrued: zod
+    .number()
+    .describe("Current outstanding fine in USD ($0.50\/day overdue)"),
+  finePaidAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * @summary Get outstanding fines for the current user
+ */
+export const GetMyFinesResponse = zod.object({
+  totalOutstanding: zod.number(),
+  items: zod.array(
+    zod.object({
+      loanId: zod.number(),
+      bookTitle: zod.string(),
+      dueDate: zod.coerce.date(),
+      daysOverdue: zod.number(),
+      fineAmount: zod.number(),
+    }),
+  ),
+  hasOutstanding: zod.boolean(),
+});
+
+/**
+ * @summary Mock payment — clears all outstanding fines
+ */
+export const PayFinesBody = zod.object({
+  cardLast4: zod.string(),
+  cardholderName: zod.string(),
+});
+
+export const PayFinesResponse = zod.object({
+  amountCleared: zod.number(),
+  message: zod.string(),
+  loansCleared: zod.number(),
+});
+
+/**
+ * @summary Get notifications for the current user
+ */
+export const GetNotificationsQueryParams = zod.object({
+  unreadOnly: zod.coerce.boolean().optional(),
+});
+
+export const GetNotificationsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.number(),
+      type: zod.enum(["DUE_SOON", "ROLE_CHANGED", "OVERDUE_FINE"]),
+      title: zod.string(),
+      message: zod.string(),
+      read: zod.boolean(),
+      relatedLoanId: zod.number().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  unreadCount: zod.number(),
+});
+
+/**
+ * @summary Mark all notifications as read
+ */
+export const MarkAllNotificationsReadResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary Mark a single notification as read
+ */
+export const MarkNotificationReadParams = zod.object({
+  notificationId: zod.coerce.number(),
+});
+
+export const MarkNotificationReadResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  type: zod.enum(["DUE_SOON", "ROLE_CHANGED", "OVERDUE_FINE"]),
+  title: zod.string(),
+  message: zod.string(),
+  read: zod.boolean(),
+  relatedLoanId: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
 });
 
 /**
@@ -705,6 +804,10 @@ export const GetOverdueLoansResponse = zod.object({
       returnedAt: zod.coerce.date().nullish(),
       renewalsCount: zod.number(),
       status: zod.enum(["ACTIVE", "RETURNED", "OVERDUE"]),
+      fineAccrued: zod
+        .number()
+        .describe("Current outstanding fine in USD ($0.50\/day overdue)"),
+      finePaidAt: zod.coerce.date().nullish(),
     }),
   ),
 });
@@ -797,6 +900,10 @@ export const GetRecentActivityResponse = zod.object({
         returnedAt: zod.coerce.date().nullish(),
         renewalsCount: zod.number(),
         status: zod.enum(["ACTIVE", "RETURNED", "OVERDUE"]),
+        fineAccrued: zod
+          .number()
+          .describe("Current outstanding fine in USD ($0.50\/day overdue)"),
+        finePaidAt: zod.coerce.date().nullish(),
       }),
       action: zod.enum(["BORROWED", "RETURNED", "RENEWED", "OVERDUE"]),
       timestamp: zod.coerce.date(),

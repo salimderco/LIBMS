@@ -228,6 +228,9 @@ export interface Loan {
   returnedAt?: string | null;
   renewalsCount: number;
   status: LoanStatus;
+  /** Current outstanding fine in USD ($0.50/day overdue) */
+  fineAccrued: number;
+  finePaidAt?: string | null;
 }
 
 export interface BorrowBookBody {
@@ -245,6 +248,56 @@ export interface PaginatedLoans {
 export interface MyLoansResponse {
   active: Loan[];
   history: Loan[];
+}
+
+export interface FineLoanItem {
+  loanId: number;
+  bookTitle: string;
+  dueDate: string;
+  daysOverdue: number;
+  fineAmount: number;
+}
+
+export interface FinesSummary {
+  totalOutstanding: number;
+  items: FineLoanItem[];
+  hasOutstanding: boolean;
+}
+
+export interface PayFinesBody {
+  cardLast4: string;
+  cardholderName: string;
+}
+
+export interface PayFinesResponse {
+  amountCleared: number;
+  message: string;
+  loansCleared: number;
+}
+
+export type AppNotificationType =
+  (typeof AppNotificationType)[keyof typeof AppNotificationType];
+
+export const AppNotificationType = {
+  DUE_SOON: "DUE_SOON",
+  ROLE_CHANGED: "ROLE_CHANGED",
+  OVERDUE_FINE: "OVERDUE_FINE",
+} as const;
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: AppNotificationType;
+  title: string;
+  message: string;
+  read: boolean;
+  relatedLoanId?: number | null;
+  createdAt: string;
+}
+
+export interface NotificationsResponse {
+  data: AppNotification[];
+  unreadCount: number;
 }
 
 export interface DashboardSummary {
@@ -342,6 +395,10 @@ export const ListAllLoansStatus = {
   RETURNED: "RETURNED",
   OVERDUE: "OVERDUE",
 } as const;
+
+export type GetNotificationsParams = {
+  unreadOnly?: boolean;
+};
 
 export type ListUsersParams = {
   page?: number;

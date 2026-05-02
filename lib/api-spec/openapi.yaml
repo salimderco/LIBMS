@@ -19,6 +19,10 @@ tags:
     description: User management operations
   - name: dashboard
     description: Dashboard summary operations
+  - name: fines
+    description: Fine and billing operations
+  - name: notifications
+    description: In-app notification operations
 
 paths:
   /healthz:
@@ -501,6 +505,92 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── Fines ──────────────────────────────────────────────────────────────────
+
+  /fines/my:
+    get:
+      operationId: getMyFines
+      tags: [fines]
+      summary: Get outstanding fines for the current user
+      responses:
+        "200":
+          description: Fines summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinesSummary"
+
+  /fines/pay:
+    post:
+      operationId: payFines
+      tags: [fines]
+      summary: Mock payment — clears all outstanding fines
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayFinesBody"
+      responses:
+        "200":
+          description: Fines cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayFinesResponse"
+
+  # ─── Notifications ───────────────────────────────────────────────────────────
+
+  /notifications:
+    get:
+      operationId: getNotifications
+      tags: [notifications]
+      summary: Get notifications for the current user
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Notifications list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsResponse"
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: All marked read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /notifications/{notificationId}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a single notification as read
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notification marked read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppNotification"
 
   # ─── Users ──────────────────────────────────────────────────────────────────
 
@@ -986,7 +1076,14 @@ components:
         status:
           type: string
           enum: [ACTIVE, RETURNED, OVERDUE]
-      required: [id, userId, bookId, borrowedAt, dueDate, renewalsCount, status]
+        fineAccrued:
+          type: number
+          description: Current outstanding fine in USD ($0.50/day overdue)
+        finePaidAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [id, userId, bookId, borrowedAt, dueDate, renewalsCount, status, fineAccrued]
 
     BorrowBookBody:
       type: object
@@ -1024,6 +1121,94 @@ components:
           items:
             $ref: "#/components/schemas/Loan"
       required: [active, history]
+
+    # ─── Fine Schemas ────────────────────────────────────────────────────────
+
+    FineLoanItem:
+      type: object
+      properties:
+        loanId:
+          type: integer
+        bookTitle:
+          type: string
+        dueDate:
+          type: string
+          format: date-time
+        daysOverdue:
+          type: integer
+        fineAmount:
+          type: number
+      required: [loanId, bookTitle, dueDate, daysOverdue, fineAmount]
+
+    FinesSummary:
+      type: object
+      properties:
+        totalOutstanding:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FineLoanItem"
+        hasOutstanding:
+          type: boolean
+      required: [totalOutstanding, items, hasOutstanding]
+
+    PayFinesBody:
+      type: object
+      properties:
+        cardLast4:
+          type: string
+        cardholderName:
+          type: string
+      required: [cardLast4, cardholderName]
+
+    PayFinesResponse:
+      type: object
+      properties:
+        amountCleared:
+          type: number
+        message:
+          type: string
+        loansCleared:
+          type: integer
+      required: [amountCleared, message, loansCleared]
+
+    # ─── Notification Schemas ─────────────────────────────────────────────────
+
+    AppNotification:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        type:
+          type: string
+          enum: [DUE_SOON, ROLE_CHANGED, OVERDUE_FINE]
+        title:
+          type: string
+        message:
+          type: string
+        read:
+          type: boolean
+        relatedLoanId:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, userId, type, title, message, read, createdAt]
+
+    NotificationsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppNotification"
+        unreadCount:
+          type: integer
+      required: [data, unreadCount]
 
     # ─── Dashboard Schemas ──────────────────────────────────────────────────
 
