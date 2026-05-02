@@ -1,22 +1,31 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Faculty Library Management System API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: books
+    description: Book catalog operations
+  - name: loans
+    description: Loan operations
+  - name: users
+    description: User management operations
+  - name: dashboard
+    description: Dashboard summary operations
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +33,615 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Auth ───────────────────────────────────────────────────────────────────
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateMe
+      tags: [auth]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      summary: Request password reset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordBody"
+      responses:
+        "200":
+          description: Reset token sent (printed to console in dev)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: Reset password with token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordBody"
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── Books ──────────────────────────────────────────────────────────────────
+
+  /books:
+    get:
+      operationId: listBooks
+      tags: [books]
+      summary: List and search books with filters and pagination
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search query (title, author, ISBN)
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [PHYSICAL, DIGITAL]
+        - name: available
+          in: query
+          schema:
+            type: boolean
+          description: Filter only books with available copies
+        - name: yearFrom
+          in: query
+          schema:
+            type: integer
+        - name: yearTo
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated books
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedBooks"
+
+    post:
+      operationId: createBook
+      tags: [books]
+      summary: Add a new book to the catalog (Librarian/Admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookBody"
+      responses:
+        "201":
+          description: Book created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /books/import:
+    post:
+      operationId: importBooks
+      tags: [books]
+      summary: Bulk import books via JSON array (Librarian/Admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportBooksBody"
+      responses:
+        "201":
+          description: Books imported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportBooksResponse"
+        "422":
+          description: Validation errors in import data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportErrorResponse"
+
+  /books/categories:
+    get:
+      operationId: listBookCategories
+      tags: [books]
+      summary: Get distinct categories for filter UI
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items:
+                      type: string
+                required: [categories]
+
+  /books/{bookId}:
+    get:
+      operationId: getBook
+      tags: [books]
+      summary: Get a single book by ID
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Book
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      operationId: updateBook
+      tags: [books]
+      summary: Update a book (Librarian/Admin, cannot change availableCopies directly)
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBookBody"
+      responses:
+        "200":
+          description: Updated book
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+
+    delete:
+      operationId: deleteBook
+      tags: [books]
+      summary: Delete a book (only if no active loans)
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "409":
+          description: Book has active loans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── Loans ──────────────────────────────────────────────────────────────────
+
+  /loans:
+    get:
+      operationId: listAllLoans
+      tags: [loans]
+      summary: List all loans in the system (Librarian/Admin)
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: integer
+        - name: bookId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, RETURNED, OVERDUE]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated loans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedLoans"
+
+  /loans/my:
+    get:
+      operationId: getMyLoans
+      tags: [loans]
+      summary: Get current user's loans (active and history)
+      responses:
+        "200":
+          description: My loans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyLoansResponse"
+
+  /loans/borrow:
+    post:
+      operationId: borrowBook
+      tags: [loans]
+      summary: Borrow a book (atomic transaction)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BorrowBookBody"
+      responses:
+        "201":
+          description: Loan created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+        "400":
+          description: Cannot borrow (quota, duplicate, unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /loans/{loanId}/return:
+    post:
+      operationId: returnLoan
+      tags: [loans]
+      summary: Process a return (Librarian/Admin)
+      parameters:
+        - name: loanId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Loan returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+
+  /loans/{loanId}/renew:
+    post:
+      operationId: renewLoan
+      tags: [loans]
+      summary: Renew a loan (borrower only, max 2 renewals)
+      parameters:
+        - name: loanId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Loan renewed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+        "400":
+          description: Cannot renew
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── Users ──────────────────────────────────────────────────────────────────
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users (Admin only)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedUsers"
+
+  /users/{userId}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID (Admin)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user role or active status (Admin)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # ─── Dashboard ──────────────────────────────────────────────────────────────
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Summary statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/overdue:
+    get:
+      operationId: getOverdueLoans
+      tags: [dashboard]
+      summary: Get overdue loans summary (Librarian/Admin)
+      responses:
+        "200":
+          description: Overdue loan stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OverdueSummary"
+
+  /dashboard/popular-books:
+    get:
+      operationId: getPopularBooks
+      tags: [dashboard]
+      summary: Get most borrowed books
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 5
+      responses:
+        "200":
+          description: Popular books
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PopularBooksResponse"
+
+  /dashboard/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Get recent borrowing activity (Librarian/Admin)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecentActivityResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +649,452 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error, message]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    # ─── Auth Schemas ───────────────────────────────────────────────────────
+
+    RegisterBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        role:
+          type: string
+          enum: [STUDENT, FACULTY, LIBRARIAN, ADMIN]
+        department:
+          type: string
+      required: [name, email, password, role, department]
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+
+    UpdateProfileBody:
+      type: object
+      properties:
+        name:
+          type: string
+        department:
+          type: string
+        phone:
+          type: string
+
+    ForgotPasswordBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required: [email]
+
+    ResetPasswordBody:
+      type: object
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          minLength: 6
+      required: [token, password]
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required: [user, token]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [STUDENT, FACULTY, LIBRARIAN, ADMIN]
+        department:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, email, role, department, isActive, createdAt]
+
+    UpdateUserBody:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [STUDENT, FACULTY, LIBRARIAN, ADMIN]
+        isActive:
+          type: boolean
+
+    PaginatedUsers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalRecords:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, page, pageSize, totalRecords, totalPages]
+
+    # ─── Book Schemas ───────────────────────────────────────────────────────
+
+    Book:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        author:
+          type: string
+        isbn:
+          type: string
+        publisher:
+          type: string
+        publicationYear:
+          type: integer
+        edition:
+          type: string
+          nullable: true
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        format:
+          type: string
+          enum: [PHYSICAL, DIGITAL]
+        totalCopies:
+          type: integer
+        availableCopies:
+          type: integer
+        shelfLocation:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        coverImage:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, title, author, isbn, publisher, publicationYear, category, tags, format, totalCopies, availableCopies, createdAt]
+
+    CreateBookBody:
+      type: object
+      properties:
+        title:
+          type: string
+        author:
+          type: string
+        isbn:
+          type: string
+        publisher:
+          type: string
+        publicationYear:
+          type: integer
+        edition:
+          type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        format:
+          type: string
+          enum: [PHYSICAL, DIGITAL]
+        totalCopies:
+          type: integer
+          minimum: 1
+        shelfLocation:
+          type: string
+        description:
+          type: string
+        coverImage:
+          type: string
+      required: [title, author, isbn, publisher, publicationYear, category, format, totalCopies]
+
+    UpdateBookBody:
+      type: object
+      properties:
+        title:
+          type: string
+        author:
+          type: string
+        isbn:
+          type: string
+        publisher:
+          type: string
+        publicationYear:
+          type: integer
+        edition:
+          type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        format:
+          type: string
+          enum: [PHYSICAL, DIGITAL]
+        totalCopies:
+          type: integer
+        shelfLocation:
+          type: string
+        description:
+          type: string
+        coverImage:
+          type: string
+
+    PaginatedBooks:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Book"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalRecords:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, page, pageSize, totalRecords, totalPages]
+
+    ImportBooksBody:
+      type: object
+      properties:
+        books:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateBookBody"
+      required: [books]
+
+    ImportBooksResponse:
+      type: object
+      properties:
+        imported:
+          type: integer
+        message:
+          type: string
+      required: [imported, message]
+
+    ImportErrorResponse:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImportRowError"
+        message:
+          type: string
+      required: [errors, message]
+
+    ImportRowError:
+      type: object
+      properties:
+        row:
+          type: integer
+        field:
+          type: string
+        reason:
+          type: string
+      required: [row, field, reason]
+
+    # ─── Loan Schemas ───────────────────────────────────────────────────────
+
+    Loan:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        bookId:
+          type: integer
+        book:
+          $ref: "#/components/schemas/Book"
+        user:
+          $ref: "#/components/schemas/User"
+        borrowedAt:
+          type: string
+          format: date-time
+        dueDate:
+          type: string
+          format: date-time
+        returnedAt:
+          type: string
+          format: date-time
+          nullable: true
+        renewalsCount:
+          type: integer
+        status:
+          type: string
+          enum: [ACTIVE, RETURNED, OVERDUE]
+      required: [id, userId, bookId, borrowedAt, dueDate, renewalsCount, status]
+
+    BorrowBookBody:
+      type: object
+      properties:
+        bookId:
+          type: integer
+      required: [bookId]
+
+    PaginatedLoans:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Loan"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalRecords:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, page, pageSize, totalRecords, totalPages]
+
+    MyLoansResponse:
+      type: object
+      properties:
+        active:
+          type: array
+          items:
+            $ref: "#/components/schemas/Loan"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/Loan"
+      required: [active, history]
+
+    # ─── Dashboard Schemas ──────────────────────────────────────────────────
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalBooks:
+          type: integer
+        totalUsers:
+          type: integer
+        activeLoans:
+          type: integer
+        overdueLoans:
+          type: integer
+        availableBooks:
+          type: integer
+        myActiveLoans:
+          type: integer
+          nullable: true
+        myOverdueLoans:
+          type: integer
+          nullable: true
+      required: [totalBooks, totalUsers, activeLoans, overdueLoans, availableBooks]
+
+    OverdueSummary:
+      type: object
+      properties:
+        count:
+          type: integer
+        loans:
+          type: array
+          items:
+            $ref: "#/components/schemas/Loan"
+      required: [count, loans]
+
+    PopularBook:
+      type: object
+      properties:
+        book:
+          $ref: "#/components/schemas/Book"
+        borrowCount:
+          type: integer
+      required: [book, borrowCount]
+
+    PopularBooksResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PopularBook"
+      required: [data]
+
+    ActivityItem:
+      type: object
+      properties:
+        loan:
+          $ref: "#/components/schemas/Loan"
+        action:
+          type: string
+          enum: [BORROWED, RETURNED, RENEWED, OVERDUE]
+        timestamp:
+          type: string
+          format: date-time
+      required: [loan, action, timestamp]
+
+    RecentActivityResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityItem"
+      required: [data]

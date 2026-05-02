@@ -1,0 +1,46 @@
+Act as an expert Full-Stack Software Engineer and UI/UX Designer. Build a complete, production-ready, and modern Faculty Library Management System (FLMS) using Next.js (App Router), Tailwind CSS, Shadcn UI, and Prisma ORM with SQLite (or PostgreSQL). 
+
+Follow these project rules, constraints, and requirements strictly:
+
+### 1. Project Setup & Architecture
+- Use Next.js App Router. Create a unified, coherent full-stack application.
+- Use Prisma ORM for type-safe database access, schema migrations, and concurrency controls.
+- Implement responsive, high-end, and accessible design using Tailwind CSS and Shadcn UI components. Include explicit loading skeletons and clear user-friendly error messages.
+
+### 2. User Roles & Authentication
+- Roles: Student (quota: 5 active loans, 14-day duration), Faculty (quota: 10 active loans, 30-day duration), Librarian (manage catalog, process returns, view all loans), Admin (user management, change roles, deactivate accounts).
+- Use a secure authentication system (NextAuth.js or JWT/session-based cookies). Passwords must be hashed using bcrypt or argon2 before storage.
+- Deactivated users must be blocked from logging in or accessing any routes. When a user logs out, their session/token must be fully invalidated server-side.
+
+### 3. Database Schema (Prisma)
+Design a schema that enforces strict relationships and atomicity:
+- User: id, name, email, passwordHash, role (Enum: STUDENT, FACULTY, LIBRARIAN, ADMIN), department, phone, isActive (Boolean), createdAt, updatedAt.
+- Book: id, title, author, isbn, publisher, publicationYear, edition, category, tags, format (Enum: PHYSICAL, DIGITAL), totalCopies, availableCopies, shelfLocation, description, coverImage.
+- Loan: id, userId, bookId, borrowedAt, dueDate, returnedAt, renewalsCount (default 0), status (Enum: ACTIVE, RETURNED, OVERDUE).
+
+### 4. Concurrency & Atomicity Constraints
+- The 'Borrow Book' endpoint must be an atomic transaction. available_copies cannot be edited directly via a catalog update endpoint. 
+- Use Prisma's interactive transactions ($transaction) with optimistic or pessimistic database locking. If two users attempt to borrow the last available copy of a book simultaneously, only one succeeds; the other must fail gracefully with a specific error message.
+
+### 5. Backend Functional API Requirements
+- FR-CAT: Implement advanced server-side search (by title, author, ISBN) and filtering (category, format, availability, year range).
+- All list endpoints must be paginated (e.g., page, pageSize, totalRecords, totalPages).
+- Bulk CSV/JSON import for books: Read input files, validate rows, and execute an "all-or-nothing" transaction. If any row is invalid, return the exact row number, field, and reason, and reject the entire import.
+- Auto-calculate overdue status when reading loan records or comparing timestamps in UTC.
+- Max 2 renewals per loan. Each renewal adds the user's standard duration (14 or 30 days) to the current dueDate.
+
+### 6. Frontend Pages & Views
+- Create responsive layouts for both mobile and desktop. Hide or restrict role-specific controls in the UI based on the logged-in user's role.
+- Login & Registration: Validate forms client and server-side. Display specific error messages.
+- Catalog Browse & Search: Full-featured search and filtering sidebar, paginated views, and high-end grid/list layouts.
+- Resource Detail Page: Shows detailed book metadata and real-time availability. Displays the "Borrow" button only for eligible users (hide button if 0 available copies).
+- My Loans Page: Interactive dashboard for Students/Faculty with active loans, due dates, overdue badges, and a "Renew" button. Displays complete borrowing history below.
+- Catalog Management: Librarian/Admin CRUD operations and file upload for bulk imports with explicit error logs.
+- All Loans Page: Librarian/Admin view of all system loans with comprehensive filters by user, book, and status, with an inline "Process Return" action button.
+- User Management Page: Admins can list all user accounts, update user roles, and toggle user active status.
+- My Profile: Dynamic profile view/edit for full name, department, and phone number.
+
+### 7. Clean Code & Output Protocols
+- Ensure clean project structure. Place API routes in `app/api/` and views in `app/(dashboard)/` or `app/(auth)/`.
+- Include a `.env.example` containing placeholders for required variables.
+- Write modular, readable code with async/await error handling and TypeScript types.
