@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Link } from "wouter";
 import {
   BookMarked, AlertTriangle, Clock, RotateCcw, CheckCircle,
@@ -19,7 +19,6 @@ import { cn } from "@/lib/utils";
 import { format, parseISO, differenceInDays, isPast } from "date-fns";
 
 export default function MyLoansPage() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useGetMyLoans({
@@ -28,18 +27,21 @@ export default function MyLoansPage() {
 
   const renewMutation = useRenewLoan();
 
-  const handleRenew = (loanId: number) => {
+  const handleRenew = (loanId: number, bookTitle?: string) => {
     renewMutation.mutate(
       { loanId },
       {
-        onSuccess: () => {
-          toast({ title: "Loan renewed", description: "Your loan has been extended by 14 days." });
+        onSuccess: (updated) => {
+          const days = updated.status === "ACTIVE" ? "14" : "30";
+          toast.success("Loan renewed", {
+            description: `"${bookTitle ?? "Book"}" extended — new due date: ${format(parseISO(updated.dueDate), "MMM d, yyyy")}`,
+          });
           queryClient.invalidateQueries({ queryKey: getGetMyLoansQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
         },
         onError: (err: any) => {
           const msg = err?.data?.message ?? err?.message ?? "Could not renew loan";
-          toast({ title: "Renewal failed", description: msg, variant: "destructive" });
+          toast.error("Renewal failed", { description: msg });
         }
       }
     );
@@ -51,10 +53,13 @@ export default function MyLoansPage() {
   const getDueStatus = (dueDate: string) => {
     const due = parseISO(dueDate);
     const daysLeft = differenceInDays(due, new Date());
-    if (isPast(due)) return { label: "Overdue", color: "bg-red-100 text-red-700", icon: AlertTriangle };
-    if (daysLeft <= 3) return { label: `Due in ${daysLeft}d`, color: "bg-amber-100 text-amber-700", icon: Clock };
-    return { label: `Due ${format(due, "MMM d")}`, color: "bg-green-100 text-green-700", icon: Clock };
+    if (isPast(due)) return { label: "Overdue", color: "bg-red-100 text-red-700", icon: AlertTriangle, urgent: true };
+    if (daysLeft === 0) return { label: "Due today", color: "bg-red-100 text-red-700", icon: AlertTriangle, urgent: true };
+    if (daysLeft <= 3) return { label: `Due in ${daysLeft}d`, color: "bg-amber-100 text-amber-700", icon: Clock, urgent: false };
+    return { label: `Due ${format(due, "MMM d")}`, color: "bg-green-100 text-green-700", icon: Clock, urgent: false };
   };
+
+  const overdueCount = activeLoan.filter(l => isPast(parseISO(l.dueDate))).length;
 
   return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto space-y-8">
@@ -63,12 +68,30 @@ export default function MyLoansPage() {
         <p className="text-sm text-muted-foreground mt-0.5">Track your borrowed books and renewal history</p>
       </div>
 
-      {/* Active loans */}
+      {overdueCount > 0 && (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200">
+          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-red-800">
+              {overdueCount} overdue {overdueCount === 1 ? "loan" : "loans"}
+            </p>
+            <p className="text-xs text-red-600 mt-0.5">
+              Please return overdue books as soon as possible to avoid penalties.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <BookMarked className="w-4 h-4 text-primary" />
           <h2 className="font-medium">Active Loans</h2>
           <Badge variant="secondary" className="text-xs">{activeLoan.length}</Badge>
+          {overdueCount > 0 && (
+            <Badge className="text-xs bg-red-100 text-red-700 border-red-200">
+              {overdueCount} overdue
+            </Badge>
+          )}
         </div>
 
         {isLoading ? (
@@ -90,12 +113,22 @@ export default function MyLoansPage() {
             {activeLoan.map(loan => {
               const dueStatus = getDueStatus(loan.dueDate);
               const StatusIcon = dueStatus.icon;
-              const canRenew = loan.renewalsCount < 2;
+              const canRenew = (loan.renewalsCount ?? 0) < 2;
+              const isOverdue = isPast(parseISO(loan.dueDate));
               return (
-                <Card key={loan.id} className={cn("transition-all", dueStatus.label === "Overdue" && "border-red-200 bg-red-50/30")}>
+                <Card
+                  key={loan.id}
+                  className={cn(
+                    "transition-all",
+                    isOverdue && "border-red-300 bg-red-50/40 shadow-sm shadow-red-100"
+                  )}
+                >
                   <CardContent className="p-4 flex flex-col md:flex-row md:items-center gap-4">
-                    <div className="w-10 h-12 rounded bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center flex-shrink-0">
-                      <BookOpen className="w-4 h-4 text-primary/40" />
+                    <div className={cn(
+                      "w-10 h-12 rounded flex items-center justify-center flex-shrink-0",
+                      isOverdue ? "bg-red-100" : "bg-gradient-to-br from-primary/10 to-primary/5"
+                    )}>
+                      <BookOpen className={cn("w-4 h-4", isOverdue ? "text-red-400" : "text-primary/40")} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <Link
@@ -106,7 +139,7 @@ export default function MyLoansPage() {
                         {loan.book?.title}
                       </Link>
                       <p className="text-xs text-muted-foreground mt-0.5">{loan.book?.author}</p>
-                      <div className="flex items-center gap-3 mt-2">
+                      <div className="flex flex-wrap items-center gap-3 mt-2">
                         <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1", dueStatus.color)}>
                           <StatusIcon className="w-3 h-3" />
                           {dueStatus.label}
@@ -114,24 +147,24 @@ export default function MyLoansPage() {
                         <span className="text-xs text-muted-foreground">
                           Borrowed {format(parseISO(loan.borrowedAt), "MMM d, yyyy")}
                         </span>
-                        {loan.renewalsCount > 0 && (
+                        {(loan.renewalsCount ?? 0) > 0 && (
                           <span className="text-xs text-muted-foreground">
-                            {loan.renewalsCount} renewal{loan.renewalsCount > 1 ? "s" : ""} used
+                            {loan.renewalsCount} renewal{(loan.renewalsCount ?? 0) > 1 ? "s" : ""} used
                           </span>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <Button
-                        variant="outline"
+                        variant={canRenew ? "outline" : "ghost"}
                         size="sm"
                         disabled={!canRenew || renewMutation.isPending}
-                        onClick={() => handleRenew(loan.id)}
+                        onClick={() => handleRenew(loan.id, loan.book?.title)}
                         data-testid={`button-renew-${loan.id}`}
-                        title={!canRenew ? "Maximum renewals reached" : "Renew for 14 more days"}
+                        title={!canRenew ? "Maximum renewals reached" : "Extend due date"}
                       >
                         <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-                        Renew {canRenew ? `(${2 - loan.renewalsCount} left)` : "(max)"}
+                        {canRenew ? `Renew (${2 - (loan.renewalsCount ?? 0)} left)` : "Max renewals"}
                       </Button>
                     </div>
                   </CardContent>
@@ -144,7 +177,6 @@ export default function MyLoansPage() {
 
       <Separator />
 
-      {/* History */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <CheckCircle className="w-4 h-4 text-muted-foreground" />

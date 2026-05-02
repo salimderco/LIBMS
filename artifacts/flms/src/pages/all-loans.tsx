@@ -11,10 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Search, BookMarked, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isPast } from "date-fns";
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "bg-blue-100 text-blue-700",
@@ -24,7 +24,6 @@ const STATUS_COLORS: Record<string, string> = {
 const PAGE_SIZE = 20;
 
 export default function AllLoansPage() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
@@ -45,20 +44,28 @@ export default function AllLoansPage() {
 
   const totalPages = data?.totalPages ?? 0;
 
-  const handleReturn = (loanId: number) => {
+  const getComputedStatus = (loan: { dueDate: string; returnedAt?: string | null }) => {
+    if (loan.returnedAt) return "RETURNED";
+    if (isPast(parseISO(loan.dueDate))) return "OVERDUE";
+    return "ACTIVE";
+  };
+
+  const handleReturn = (loanId: number, bookTitle?: string) => {
     setReturningId(loanId);
     returnMutation.mutate(
       { loanId },
       {
         onSuccess: () => {
-          toast({ title: "Book returned", description: "Loan has been marked as returned." });
+          toast.success("Book returned", {
+            description: `"${bookTitle ?? "Book"}" has been checked in successfully.`,
+          });
           queryClient.invalidateQueries({ queryKey: getListAllLoansQueryKey({}) });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
           setReturningId(null);
         },
         onError: (err: any) => {
           const msg = err?.data?.message ?? err?.message ?? "Failed to process return";
-          toast({ title: "Error", description: msg, variant: "destructive" });
+          toast.error("Return failed", { description: msg });
           setReturningId(null);
         }
       }
@@ -107,7 +114,7 @@ export default function AllLoansPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="hidden md:grid grid-cols-[1fr_1fr_120px_100px_80px_120px] gap-4 px-4 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="hidden md:grid grid-cols-[1fr_1fr_120px_100px_80px_130px] gap-4 px-4 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             <span>Book</span>
             <span>Borrower</span>
             <span>Borrowed</span>
@@ -116,44 +123,52 @@ export default function AllLoansPage() {
             <span>Action</span>
           </div>
 
-          {data.data.map(loan => (
-            <Card key={loan.id} className={cn("transition-colors", loan.status === "OVERDUE" && "border-red-200 bg-red-50/30")}>
-              <CardContent className="p-4 grid md:grid-cols-[1fr_1fr_120px_100px_80px_120px] gap-3 md:gap-4 items-center">
-                <div className="min-w-0">
-                  <p className="font-medium text-sm truncate" data-testid={`loan-book-${loan.id}`}>{loan.book?.title}</p>
-                  <p className="text-xs text-muted-foreground truncate">{loan.book?.author}</p>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm truncate">{loan.user?.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{loan.user?.email}</p>
-                </div>
-                <p className="text-sm text-muted-foreground">{format(parseISO(loan.borrowedAt), "MMM d, yyyy")}</p>
-                <p className="text-sm text-muted-foreground">{format(parseISO(loan.dueDate), "MMM d")}</p>
-                <span className={cn("text-xs px-2 py-1 rounded-full font-medium inline-block text-center", STATUS_COLORS[loan.status])}>
-                  {loan.status}
-                </span>
-                {loan.status !== "RETURNED" ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={returningId === loan.id}
-                    onClick={() => handleReturn(loan.id)}
-                    data-testid={`button-return-${loan.id}`}
-                  >
-                    {returningId === loan.id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      "Process Return"
-                    )}
-                  </Button>
-                ) : (
-                  <span className="text-xs text-muted-foreground">
-                    {loan.returnedAt ? format(parseISO(loan.returnedAt), "MMM d") : "—"}
+          {data.data.map(loan => {
+            const computedStatus = getComputedStatus({ dueDate: loan.dueDate, returnedAt: loan.returnedAt });
+            return (
+              <Card key={loan.id} className={cn(
+                "transition-colors",
+                computedStatus === "OVERDUE" && "border-red-200 bg-red-50/30"
+              )}>
+                <CardContent className="p-4 grid md:grid-cols-[1fr_1fr_120px_100px_80px_130px] gap-3 md:gap-4 items-center">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate" data-testid={`loan-book-${loan.id}`}>{loan.book?.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{loan.book?.author}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm truncate">{loan.user?.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{loan.user?.email}</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{format(parseISO(loan.borrowedAt), "MMM d, yyyy")}</p>
+                  <p className={cn("text-sm", computedStatus === "OVERDUE" && "text-red-600 font-medium")}>
+                    {format(parseISO(loan.dueDate), "MMM d")}
+                  </p>
+                  <span className={cn("text-xs px-2 py-1 rounded-full font-medium inline-block text-center", STATUS_COLORS[computedStatus])}>
+                    {computedStatus}
                   </span>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  {computedStatus !== "RETURNED" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={returningId === loan.id}
+                      onClick={() => handleReturn(loan.id, loan.book?.title)}
+                      data-testid={`button-return-${loan.id}`}
+                    >
+                      {returningId === loan.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        "Process Return"
+                      )}
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      {loan.returnedAt ? format(parseISO(loan.returnedAt), "MMM d") : "—"}
+                    </span>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 

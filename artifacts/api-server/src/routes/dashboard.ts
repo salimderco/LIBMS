@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { loansTable, booksTable, usersTable } from "@workspace/db";
-import { eq, count, gte, sql, lt } from "drizzle-orm";
+import { loansTable, booksTable, usersTable, activityLogsTable } from "@workspace/db";
+import { eq, count, gte, sql, desc } from "drizzle-orm";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate.js";
 
 const router = Router();
@@ -52,12 +52,16 @@ router.get("/dashboard/overdue", authenticate as any, requireRole("LIBRARIAN", "
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, loan.userId)).limit(1);
     return {
       id: loan.id, userId: loan.userId, bookId: loan.bookId,
-      book: book ? { id: book.id, title: book.title, author: book.author, isbn: book.isbn, publisher: book.publisher,
+      book: book ? {
+        id: book.id, title: book.title, author: book.author, isbn: book.isbn, publisher: book.publisher,
         publicationYear: book.publicationYear, edition: book.edition, category: book.category, tags: book.tags ?? [],
         format: book.format, totalCopies: book.totalCopies, availableCopies: book.availableCopies,
-        shelfLocation: book.shelfLocation, description: book.description, coverImage: book.coverImage, createdAt: book.createdAt } : undefined,
-      user: user ? { id: user.id, name: user.name, email: user.email, role: user.role, department: user.department,
-        phone: user.phone, isActive: user.isActive, createdAt: user.createdAt } : undefined,
+        shelfLocation: book.shelfLocation, description: book.description, coverImage: book.coverImage, createdAt: book.createdAt,
+      } : undefined,
+      user: user ? {
+        id: user.id, name: user.name, email: user.email, role: user.role, department: user.department,
+        phone: user.phone, isActive: user.isActive, createdAt: user.createdAt,
+      } : undefined,
       borrowedAt: loan.borrowedAt, dueDate: loan.dueDate, returnedAt: loan.returnedAt,
       renewalsCount: loan.renewalsCount, status: "OVERDUE" as const,
     };
@@ -93,29 +97,98 @@ router.get("/dashboard/popular-books", authenticate as any, async (req, res) => 
 
 router.get("/dashboard/recent-activity", authenticate as any, requireRole("LIBRARIAN", "ADMIN") as any, async (req, res) => {
   const limit = Math.min(50, parseInt(req.query.limit as string) || 10);
-  const loans = await db.select().from(loansTable).orderBy(loansTable.updatedAt).limit(limit);
-  const now = new Date();
 
-  const data = await Promise.all(loans.map(async (loan) => {
-    const [book] = await db.select().from(booksTable).where(eq(booksTable.id, loan.bookId)).limit(1);
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, loan.userId)).limit(1);
-    const status = loan.returnedAt ? "RETURNED" : (loan.dueDate < now ? "OVERDUE" : "ACTIVE");
-    const loanSerialized = {
-      id: loan.id, userId: loan.userId, bookId: loan.bookId,
-      book: book ? { id: book.id, title: book.title, author: book.author, isbn: book.isbn, publisher: book.publisher,
-        publicationYear: book.publicationYear, edition: book.edition, category: book.category, tags: book.tags ?? [],
-        format: book.format, totalCopies: book.totalCopies, availableCopies: book.availableCopies,
-        shelfLocation: book.shelfLocation, description: book.description, coverImage: book.coverImage, createdAt: book.createdAt } : undefined,
-      user: user ? { id: user.id, name: user.name, email: user.email, role: user.role, department: user.department,
-        phone: user.phone, isActive: user.isActive, createdAt: user.createdAt } : undefined,
-      borrowedAt: loan.borrowedAt, dueDate: loan.dueDate, returnedAt: loan.returnedAt,
-      renewalsCount: loan.renewalsCount, status,
+  const logs = await db
+    .select()
+    .from(activityLogsTable)
+    .orderBy(desc(activityLogsTable.createdAt))
+    .limit(limit);
+
+  const data = await Promise.all(logs.map(async (log) => {
+    const [book] = await db.select().from(booksTable).where(eq(booksTable.id, log.bookId)).limit(1);
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, log.userId)).limit(1);
+
+    let loanSerialized = null;
+    if (log.loanId) {
+      const [loan] = await db.select().from(loansTable).where(eq(loansTable.id, log.loanId)).limit(1);
+      if (loan) {
+        const status = loan.returnedAt ? "RETURNED" : (new Date() > loan.dueDate ? "OVERDUE" : "ACTIVE");
+        loanSerialized = {
+          id: loan.id, userId: loan.userId, bookId: loan.bookId,
+          book: book ? {
+            id: book.id, title: book.title, author: book.author, isbn: book.isbn, publisher: book.publisher,
+            publicationYear: book.publicationYear, edition: book.edition, category: book.category, tags: book.tags ?? [],
+            format: book.format, totalCopies: book.totalCopies, availableCopies: book.availableCopies,
+            shelfLocation: book.shelfLocation, description: book.description, coverImage: book.coverImage, createdAt: book.createdAt,
+          } : undefined,
+          user: user ? {
+            id: user.id, name: user.name, email: user.email, role: user.role, department: user.department,
+            phone: user.phone, isActive: user.isActive, createdAt: user.createdAt,
+          } : undefined,
+          borrowedAt: loan.borrowedAt, dueDate: loan.dueDate, returnedAt: loan.returnedAt,
+          renewalsCount: loan.renewalsCount, status,
+        };
+      }
+    }
+
+    if (!loanSerialized) {
+      loanSerialized = {
+        id: 0, userId: log.userId, bookId: log.bookId,
+        book: book ? {
+          id: book.id, title: book.title, author: book.author, isbn: book.isbn, publisher: book.publisher,
+          publicationYear: book.publicationYear, edition: book.edition, category: book.category, tags: book.tags ?? [],
+          format: book.format, totalCopies: book.totalCopies, availableCopies: book.availableCopies,
+          shelfLocation: book.shelfLocation, description: book.description, coverImage: book.coverImage, createdAt: book.createdAt,
+        } : undefined,
+        user: user ? {
+          id: user.id, name: user.name, email: user.email, role: user.role, department: user.department,
+          phone: user.phone, isActive: user.isActive, createdAt: user.createdAt,
+        } : undefined,
+        borrowedAt: log.createdAt, dueDate: log.createdAt, returnedAt: null,
+        renewalsCount: 0, status: "ACTIVE" as const,
+      };
+    }
+
+    return {
+      loan: loanSerialized,
+      action: log.action as "BORROWED" | "RETURNED" | "RENEWED" | "OVERDUE",
+      timestamp: log.createdAt,
     };
-    const action = loan.returnedAt ? "RETURNED" : loan.renewalsCount > 0 ? "RENEWED" : status === "OVERDUE" ? "OVERDUE" : "BORROWED";
-    return { loan: loanSerialized, action, timestamp: loan.updatedAt };
   }));
 
   res.json({ data });
+});
+
+router.get("/dashboard/trends", authenticate as any, requireRole("LIBRARIAN", "ADMIN") as any, async (req, res) => {
+  const days = Math.min(90, Math.max(7, parseInt(req.query.days as string) || 14));
+  const since = new Date();
+  since.setDate(since.getDate() - days + 1);
+  since.setHours(0, 0, 0, 0);
+
+  const logs = await db
+    .select()
+    .from(activityLogsTable)
+    .where(gte(activityLogsTable.createdAt, since))
+    .orderBy(activityLogsTable.createdAt);
+
+  const byDate: Record<string, { date: string; borrowed: number; returned: number; renewed: number }> = {};
+
+  for (let i = 0; i < days; i++) {
+    const d = new Date(since);
+    d.setDate(d.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    byDate[key] = { date: key, borrowed: 0, returned: 0, renewed: 0 };
+  }
+
+  for (const log of logs) {
+    const key = log.createdAt.toISOString().slice(0, 10);
+    if (!byDate[key]) continue;
+    if (log.action === "BORROWED") byDate[key].borrowed++;
+    else if (log.action === "RETURNED") byDate[key].returned++;
+    else if (log.action === "RENEWED") byDate[key].renewed++;
+  }
+
+  res.json({ data: Object.values(byDate), days });
 });
 
 export default router;

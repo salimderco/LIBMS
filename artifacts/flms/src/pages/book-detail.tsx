@@ -10,21 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   BookOpen, ArrowLeft, MapPin, Wifi, BookMarked,
   Calendar, Hash, Building, Layers, Loader2
 } from "lucide-react";
-import { useState } from "react";
 
 interface Props { bookId: number }
 
 export default function BookDetailPage({ bookId }: Props) {
   const { user } = useAuth();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [borrowError, setBorrowError] = useState("");
 
   const { data: book, isLoading } = useGetBook(bookId, {
     query: { queryKey: getGetBookQueryKey(bookId) }
@@ -34,19 +30,20 @@ export default function BookDetailPage({ bookId }: Props) {
   const canBorrow = user?.role === "STUDENT" || user?.role === "FACULTY";
 
   const handleBorrow = () => {
-    setBorrowError("");
     borrowMutation.mutate(
       { data: { bookId } },
       {
         onSuccess: () => {
-          toast({ title: "Book borrowed!", description: `You have borrowed "${book?.title}". Due in 14 days.` });
+          toast.success("Book borrowed!", {
+            description: `"${book?.title}" is now in your loans. Return it on time to avoid penalties.`,
+          });
           queryClient.invalidateQueries({ queryKey: getGetBookQueryKey(bookId) });
           queryClient.invalidateQueries({ queryKey: getListBooksQueryKey({}) });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
         },
         onError: (err: any) => {
           const msg = err?.data?.message ?? err?.message ?? "Failed to borrow book";
-          setBorrowError(msg);
+          toast.error("Could not borrow book", { description: msg });
         }
       }
     );
@@ -91,13 +88,11 @@ export default function BookDetailPage({ bookId }: Props) {
       </Link>
 
       <div className="grid md:grid-cols-3 gap-8">
-        {/* Cover */}
         <div className="space-y-4">
           <div className="aspect-[3/4] rounded-lg bg-gradient-to-br from-primary/15 to-primary/5 border border-border flex items-center justify-center">
             <BookOpen className="w-16 h-16 text-primary/20" />
           </div>
 
-          {/* Availability */}
           <div className="rounded-lg border p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Availability</span>
@@ -107,34 +102,26 @@ export default function BookDetailPage({ bookId }: Props) {
             </div>
             {book.format === "PHYSICAL" && (
               <p className="text-xs text-muted-foreground">
-                {book.availableCopies} of {book.totalCopies} copies available
+                {book.availableCopies} of {book.totalCopies} {book.totalCopies === 1 ? "copy" : "copies"} available
               </p>
             )}
             {canBorrow && (
-              <>
-                {borrowError && (
-                  <Alert variant="destructive" className="py-2">
-                    <AlertDescription className="text-xs">{borrowError}</AlertDescription>
-                  </Alert>
+              <Button
+                className="w-full"
+                disabled={!isAvailable || borrowMutation.isPending}
+                onClick={handleBorrow}
+                data-testid="button-borrow"
+              >
+                {borrowMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Borrowing...</>
+                ) : (
+                  <><BookMarked className="w-4 h-4 mr-2" />Borrow this book</>
                 )}
-                <Button
-                  className="w-full"
-                  disabled={!isAvailable || borrowMutation.isPending}
-                  onClick={handleBorrow}
-                  data-testid="button-borrow"
-                >
-                  {borrowMutation.isPending ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Borrowing...</>
-                  ) : (
-                    <><BookMarked className="w-4 h-4 mr-2" />Borrow this book</>
-                  )}
-                </Button>
-              </>
+              </Button>
             )}
           </div>
         </div>
 
-        {/* Details */}
         <div className="md:col-span-2 space-y-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
@@ -181,7 +168,7 @@ export default function BookDetailPage({ bookId }: Props) {
             ) : null)}
           </div>
 
-          {book.tags?.length > 0 && (
+          {(book.tags?.length ?? 0) > 0 && (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Tags</p>
               <div className="flex flex-wrap gap-1.5">

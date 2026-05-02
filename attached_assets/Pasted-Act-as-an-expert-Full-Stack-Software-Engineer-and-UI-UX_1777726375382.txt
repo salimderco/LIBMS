@@ -1,0 +1,26 @@
+Act as an expert Full-Stack Software Engineer and UI/UX Designer. Let's upgrade the current Faculty Library Management System (FLMS) codebase to make it completely flawless, highly professional, and production-ready. 
+
+Implement the following advanced enhancements across the existing Next.js (App Router), Tailwind CSS, Shadcn UI, and Prisma stack:
+
+### 1. High-End UI/UX Polish
+- Add a persistent sidebar navigation (or top navigation for mobile) that dynamically highlights the active route. Render only the links accessible to the logged-in user's role.
+- Implement loading state skeletons for the dashboard stat cards and the catalog grid so the transitions feel seamless.
+- Add Sonner toast notifications for all user actions (e.g., 'Book borrowed successfully', 'Profile updated').
+- On the Dashboard (/), add a beautifully animated visual chart (using Recharts or simple Tailwind progress bars) to show borrowing trends or role distributions.
+
+### 2. Bulletproof Database Concurrency
+- Rewrite the 'Borrow Book' and 'Return Book' actions to explicitly use a Prisma transaction ($transaction). 
+- Ensure that checking the book's availability, verifying the user's active loan status, verifying the role's borrowing quota, and decrementing/incrementing the available_copies count happen atomically.
+- Include a strict validation check: available_copies must never be negative, and a user cannot borrow the same book twice simultaneously.
+
+### 3. Advanced Dashboard Activity & Stats
+- Add a dynamic 'Recent Activity Feed' for Librarians and Admins on the dashboard that lists the last 10 actions taken in the system (e.g., "[User] borrowed [Book Title] 5 mins ago"). Log these events in a dedicated `ActivityLog` table.
+- Implement real-time client-side status computation for overdue loans. If a due date is past the current timestamp in UTC and the book hasn't been returned, immediately flag it as OVERDUE with a high-visibility badge.
+
+### 4. Flawless CSV/JSON Bulk Import 
+- In the /catalog-management view, upgrade the Bulk Import feature. Add a validation preview step that parses the pasted JSON array or CSV string, highlights any rows that have missing fields or duplicate ISBNs, and prompts the user to fix them.
+- If any validation errors exist, display them clearly with a line-by-line breakdown (e.g., "Line 3: Missing ISBN field") and prevent the database submission.
+
+### 5. Code Health & Route Protection
+- Use high-order React components or Next.js Middleware to handle route-level protection. If a user tries to access `/users` but is not an Admin, immediately redirect them to the `/` dashboard with an unauthorized warning.
+- Ensure all sensitive environment variables are safely managed, and plaintext passwords are never returned in any API payloads.

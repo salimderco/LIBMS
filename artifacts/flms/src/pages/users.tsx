@@ -11,21 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Search, Users, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 
-const ROLE_COLORS: Record<string, string> = {
-  STUDENT: "bg-blue-100 text-blue-700",
-  FACULTY: "bg-purple-100 text-purple-700",
-  LIBRARIAN: "bg-amber-100 text-amber-700",
-  ADMIN: "bg-red-100 text-red-700",
-};
 const PAGE_SIZE = 20;
 
 export default function UsersPage() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -39,18 +32,24 @@ export default function UsersPage() {
   const updateMutation = useUpdateUser();
   const totalPages = data?.totalPages ?? 0;
 
-  const handleUpdate = (userId: number, updates: { role?: UpdateUserBodyRole; isActive?: boolean }) => {
+  const handleUpdate = (userId: number, userName: string, updates: { role?: UpdateUserBodyRole; isActive?: boolean }) => {
     setUpdatingId(userId);
     updateMutation.mutate(
       { userId, data: updates },
       {
         onSuccess: () => {
-          toast({ title: "User updated" });
+          if (updates.role) {
+            toast.success("Role updated", { description: `${userName} is now a ${updates.role.toLowerCase()}.` });
+          } else {
+            toast.success(updates.isActive ? "User activated" : "User deactivated", {
+              description: `${userName}'s account has been ${updates.isActive ? "activated" : "deactivated"}.`,
+            });
+          }
           queryClient.invalidateQueries({ queryKey: getListUsersQueryKey({}) });
           setUpdatingId(null);
         },
         onError: (err: any) => {
-          toast({ title: "Error", description: err?.data?.message ?? err?.message, variant: "destructive" });
+          toast.error("Update failed", { description: err?.data?.message ?? err?.message });
           setUpdatingId(null);
         }
       }
@@ -114,7 +113,7 @@ export default function UsersPage() {
 
                     <Select
                       defaultValue={user.role}
-                      onValueChange={(v) => handleUpdate(user.id, { role: v as UpdateUserBodyRole })}
+                      onValueChange={(v) => handleUpdate(user.id, user.name, { role: v as UpdateUserBodyRole })}
                       disabled={isUpdating}
                     >
                       <SelectTrigger className="w-32 h-8 text-xs" data-testid={`select-role-${user.id}`}>
@@ -134,7 +133,7 @@ export default function UsersPage() {
                       ) : (
                         <Switch
                           checked={user.isActive}
-                          onCheckedChange={(checked) => handleUpdate(user.id, { isActive: checked })}
+                          onCheckedChange={(checked) => handleUpdate(user.id, user.name, { isActive: checked })}
                           data-testid={`switch-active-${user.id}`}
                         />
                       )}

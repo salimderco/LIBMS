@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { loansTable, booksTable, usersTable } from "@workspace/db";
+import { loansTable, booksTable, usersTable, activityLogsTable } from "@workspace/db";
 import { eq, and, count, sql } from "drizzle-orm";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate.js";
 
@@ -69,7 +69,6 @@ router.get("/loans", authenticate as any, requireRole("LIBRARIAN", "ADMIN") as a
   const offset = (page - 1) * pageSize;
 
   let allLoans = await db.select().from(loansTable).orderBy(loansTable.borrowedAt);
-
   let filtered = allLoans.map(l => ({ ...l, computedStatus: computeStatus(l) }));
   if (userId) filtered = filtered.filter(l => l.userId === userId);
   if (bookId) filtered = filtered.filter(l => l.bookId === bookId);
@@ -91,6 +90,7 @@ router.get("/loans", authenticate as any, requireRole("LIBRARIAN", "ADMIN") as a
 router.post("/loans/borrow", authenticate as any, async (req: AuthRequest, res) => {
   const { bookId } = req.body;
   if (!bookId) return res.status(400).json({ error: "Validation", message: "bookId is required" });
+
   const userId = req.user!.id;
   const role = req.user!.role;
 
@@ -102,25 +102,50 @@ router.post("/loans/borrow", authenticate as any, async (req: AuthRequest, res) 
     const loan = await db.transaction(async (tx) => {
       const [book] = await tx.select().from(booksTable).where(eq(booksTable.id, bookId)).limit(1);
       if (!book) throw Object.assign(new Error("Book not found"), { status: 404 });
-      if (book.availableCopies < 1) throw Object.assign(new Error("No copies available"), { status: 400 });
 
-      const [{ activeCount }] = await tx.select({ activeCount: count() }).from(loansTable)
+      if (book.availableCopies < 1)
+        throw Object.assign(new Error("No copies available"), { status: 400 });
+
+      const [{ activeCount }] = await tx
+        .select({ activeCount: count() })
+        .from(loansTable)
         .where(and(eq(loansTable.userId, userId), eq(loansTable.status, "ACTIVE")));
-      if (Number(activeCount) >= getQuota(role)) {
+
+      if (Number(activeCount) >= getQuota(role))
         throw Object.assign(new Error(`Quota reached (max ${getQuota(role)} active loans)`), { status: 400 });
-      }
 
-      const duplicate = await tx.select().from(loansTable)
-        .where(and(eq(loansTable.userId, userId), eq(loansTable.bookId, bookId), eq(loansTable.status, "ACTIVE"))).limit(1);
-      if (duplicate.length > 0) throw Object.assign(new Error("You already have this book on loan"), { status: 400 });
+      const duplicate = await tx
+        .select()
+        .from(loansTable)
+        .where(and(eq(loansTable.userId, userId), eq(loansTable.bookId, bookId), eq(loansTable.status, "ACTIVE")))
+        .limit(1);
+      if (duplicate.length > 0)
+        throw Object.assign(new Error("You already have this book on loan"), { status: 400 });
 
-      await tx.update(booksTable).set({ availableCopies: book.availableCopies - 1, updatedAt: new Date() }).where(eq(booksTable.id, bookId));
+      const newAvailable = book.availableCopies - 1;
+      if (newAvailable < 0)
+        throw Object.assign(new Error("Concurrent borrow conflict — no copies available"), { status: 409 });
+
+      await tx
+        .update(booksTable)
+        .set({ availableCopies: newAvailable, updatedAt: new Date() })
+        .where(eq(booksTable.id, bookId));
 
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + getLoanDays(role));
-      const [newLoan] = await tx.insert(loansTable).values({
-        userId, bookId, dueDate, status: "ACTIVE",
-      }).returning();
+
+      const [newLoan] = await tx
+        .insert(loansTable)
+        .values({ userId, bookId, dueDate, status: "ACTIVE" })
+        .returning();
+
+      await tx.insert(activityLogsTable).values({
+        userId,
+        bookId,
+        loanId: newLoan.id,
+        action: "BORROWED",
+      });
+
       return newLoan;
     });
 
@@ -132,15 +157,33 @@ router.post("/loans/borrow", authenticate as any, async (req: AuthRequest, res) 
   }
 });
 
-router.post("/loans/:loanId/return", authenticate as any, requireRole("LIBRARIAN", "ADMIN") as any, async (req, res) => {
+router.post("/loans/:loanId/return", authenticate as any, requireRole("LIBRARIAN", "ADMIN") as any, async (req: AuthRequest, res) => {
   const loanId = parseInt(req.params.loanId);
   const [loan] = await db.select().from(loansTable).where(eq(loansTable.id, loanId)).limit(1);
   if (!loan) return res.status(404).json({ error: "NotFound", message: "Loan not found" });
   if (loan.returnedAt) return res.status(400).json({ error: "AlreadyReturned", message: "Loan already returned" });
 
   await db.transaction(async (tx) => {
-    await tx.update(loansTable).set({ returnedAt: new Date(), status: "RETURNED", updatedAt: new Date() }).where(eq(loansTable.id, loanId));
-    await tx.update(booksTable).set({ availableCopies: sql`${booksTable.availableCopies} + 1`, updatedAt: new Date() }).where(eq(booksTable.id, loan.bookId));
+    const now = new Date();
+    await tx
+      .update(loansTable)
+      .set({ returnedAt: now, status: "RETURNED", updatedAt: now })
+      .where(eq(loansTable.id, loanId));
+
+    await tx
+      .update(booksTable)
+      .set({
+        availableCopies: sql`LEAST(${booksTable.availableCopies} + 1, ${booksTable.totalCopies})`,
+        updatedAt: now,
+      })
+      .where(eq(booksTable.id, loan.bookId));
+
+    await tx.insert(activityLogsTable).values({
+      userId: loan.userId,
+      bookId: loan.bookId,
+      loanId: loan.id,
+      action: "RETURNED",
+    });
   });
 
   const [updated] = await db.select().from(loansTable).where(eq(loansTable.id, loanId)).limit(1);
@@ -162,9 +205,18 @@ router.post("/loans/:loanId/renew", authenticate as any, async (req: AuthRequest
   const newDue = new Date(loan.dueDate);
   newDue.setDate(newDue.getDate() + getLoanDays(role));
 
-  const [updated] = await db.update(loansTable)
+  const [updated] = await db
+    .update(loansTable)
     .set({ dueDate: newDue, renewalsCount: loan.renewalsCount + 1, updatedAt: new Date() })
-    .where(eq(loansTable.id, loanId)).returning();
+    .where(eq(loansTable.id, loanId))
+    .returning();
+
+  await db.insert(activityLogsTable).values({
+    userId: loan.userId,
+    bookId: loan.bookId,
+    loanId: loan.id,
+    action: "RENEWED",
+  });
 
   const serialized = await serializeLoan(updated);
   res.json(serialized);

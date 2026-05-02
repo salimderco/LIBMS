@@ -1,6 +1,7 @@
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import NotFound from "@/pages/not-found";
@@ -40,7 +41,12 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?
     );
   }
   if (!token || !user) return <Redirect to="/login" />;
-  if (roles && !roles.includes(user.role)) return <Redirect to="/" />;
+  if (roles && !roles.includes(user.role)) {
+    toast.error("Access denied", {
+      description: "You don't have permission to view that page.",
+    });
+    return <Redirect to="/" />;
+  }
   return <>{children}</>;
 }
 
@@ -123,7 +129,7 @@ function App() {
             <Router />
           </AuthProvider>
         </WouterRouter>
-        <Toaster />
+        <Toaster richColors closeButton position="top-right" />
       </TooltipProvider>
     </QueryClientProvider>
   );

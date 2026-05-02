@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { booksTable, loansTable } from "@workspace/db";
-import { eq, like, or, and, gte, lte, sql, count } from "drizzle-orm";
+import { eq, like, or, and, gte, lte, sql, count, inArray } from "drizzle-orm";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate.js";
 
 const router = Router();
@@ -69,7 +69,9 @@ router.post("/books/import", authenticate as any, requireRole("LIBRARIAN", "ADMI
   if (!Array.isArray(books) || books.length === 0) {
     return res.status(400).json({ error: "Validation", message: "books array is required" });
   }
+
   const errors: { row: number; field: string; reason: string }[] = [];
+
   books.forEach((b: Record<string, unknown>, i: number) => {
     const row = i + 1;
     if (!b.title) errors.push({ row, field: "title", reason: "required" });
@@ -78,27 +80,66 @@ router.post("/books/import", authenticate as any, requireRole("LIBRARIAN", "ADMI
     if (!b.publisher) errors.push({ row, field: "publisher", reason: "required" });
     if (!b.publicationYear) errors.push({ row, field: "publicationYear", reason: "required" });
     if (!b.category) errors.push({ row, field: "category", reason: "required" });
-    if (!b.format || !["PHYSICAL", "DIGITAL"].includes(b.format as string)) errors.push({ row, field: "format", reason: "must be PHYSICAL or DIGITAL" });
-    if (!b.totalCopies || Number(b.totalCopies) < 1) errors.push({ row, field: "totalCopies", reason: "must be >= 1" });
+    if (!b.format || !["PHYSICAL", "DIGITAL"].includes(b.format as string))
+      errors.push({ row, field: "format", reason: "must be PHYSICAL or DIGITAL" });
+    if (!b.totalCopies || Number(b.totalCopies) < 1)
+      errors.push({ row, field: "totalCopies", reason: "must be >= 1" });
   });
+
+  const isbnMap: Record<string, number[]> = {};
+  books.forEach((b: Record<string, unknown>, i: number) => {
+    if (b.isbn) {
+      const isbn = String(b.isbn);
+      if (!isbnMap[isbn]) isbnMap[isbn] = [];
+      isbnMap[isbn].push(i + 1);
+    }
+  });
+  for (const [isbn, rows] of Object.entries(isbnMap)) {
+    if (rows.length > 1) {
+      rows.forEach(row => errors.push({ row, field: "isbn", reason: `Duplicate ISBN "${isbn}" appears on rows ${rows.join(", ")}` }));
+    }
+  }
+
+  const incomingIsbns = books.map((b: Record<string, unknown>) => String(b.isbn)).filter(Boolean);
+  if (incomingIsbns.length > 0) {
+    const existing = await db
+      .select({ isbn: booksTable.isbn })
+      .from(booksTable)
+      .where(inArray(booksTable.isbn, incomingIsbns));
+    const existingSet = new Set(existing.map(r => r.isbn));
+    books.forEach((b: Record<string, unknown>, i: number) => {
+      if (b.isbn && existingSet.has(String(b.isbn))) {
+        errors.push({ row: i + 1, field: "isbn", reason: `ISBN "${b.isbn}" already exists in the database` });
+      }
+    });
+  }
+
   if (errors.length > 0) {
     return res.status(422).json({ errors, message: "Validation failed — no records were imported" });
   }
+
   await db.transaction(async (tx) => {
     for (const b of books) {
-      const copies = parseInt(b.totalCopies as string);
+      const copies = parseInt(String(b.totalCopies));
       await tx.insert(booksTable).values({
-        title: b.title as string, author: b.author as string, isbn: b.isbn as string,
-        publisher: b.publisher as string, publicationYear: parseInt(b.publicationYear as string),
-        edition: b.edition as string | undefined, category: b.category as string,
-        tags: (b.tags as string[]) ?? [], format: b.format as "PHYSICAL" | "DIGITAL",
-        totalCopies: copies, availableCopies: copies,
+        title: b.title as string,
+        author: b.author as string,
+        isbn: b.isbn as string,
+        publisher: (b.publisher as string) || "",
+        publicationYear: parseInt(String(b.publicationYear)) || 0,
+        edition: b.edition as string | undefined,
+        category: b.category as string,
+        tags: (b.tags as string[]) ?? [],
+        format: b.format as "PHYSICAL" | "DIGITAL",
+        totalCopies: copies,
+        availableCopies: copies,
         shelfLocation: b.shelfLocation as string | undefined,
         description: b.description as string | undefined,
         coverImage: b.coverImage as string | undefined,
       });
     }
   });
+
   res.status(201).json({ imported: books.length, message: `Successfully imported ${books.length} books` });
 });
 

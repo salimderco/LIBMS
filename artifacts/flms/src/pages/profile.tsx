@@ -9,12 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useToast } from "@/hooks/use-toast";
-import { User, Loader2, CheckCircle } from "lucide-react";
-import { useState } from "react";
+import { toast } from "sonner";
+import { User, Loader2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
 const schema = z.object({
@@ -33,10 +30,8 @@ const ROLE_COLORS: Record<string, string> = {
 
 export default function ProfilePage() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const updateMutation = useUpdateMe();
-  const [success, setSuccess] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -50,17 +45,15 @@ export default function ProfilePage() {
   const initials = user?.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() ?? "U";
 
   const onSubmit = (values: FormValues) => {
-    setSuccess(false);
     updateMutation.mutate(
       { data: { name: values.name, department: values.department || undefined, phone: values.phone || undefined } },
       {
         onSuccess: (updated) => {
           queryClient.setQueryData(getGetMeQueryKey(), updated);
-          setSuccess(true);
-          toast({ title: "Profile updated" });
+          toast.success("Profile updated", { description: "Your information has been saved." });
         },
         onError: (err: any) => {
-          toast({ title: "Error", description: err?.data?.message ?? err?.message, variant: "destructive" });
+          toast.error("Update failed", { description: err?.data?.message ?? err?.message });
         }
       }
     );
@@ -73,7 +66,6 @@ export default function ProfilePage() {
         <p className="text-sm text-muted-foreground mt-0.5">Manage your account information</p>
       </div>
 
-      {/* Profile summary */}
       <Card>
         <CardContent className="pt-6 pb-6 flex items-center gap-6">
           <Avatar className="w-16 h-16">
@@ -96,7 +88,6 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Edit form */}
       <Card>
         <CardHeader>
           <CardTitle className="font-serif text-base font-medium flex items-center gap-2">
@@ -105,20 +96,10 @@ export default function ProfilePage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {success && (
-            <Alert className="mb-4 border-green-200 bg-green-50 text-green-800">
-              <CheckCircle className="w-4 h-4 text-green-600" />
-              <AlertDescription>Profile updated successfully.</AlertDescription>
-            </Alert>
-          )}
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="profile-name">Full name</Label>
-              <Input
-                id="profile-name"
-                {...form.register("name")}
-                data-testid="input-profile-name"
-              />
+              <Input id="profile-name" {...form.register("name")} data-testid="input-profile-name" />
               {form.formState.errors.name && (
                 <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
               )}
@@ -139,30 +120,16 @@ export default function ProfilePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="profile-department">Department</Label>
-                <Input
-                  id="profile-department"
-                  {...form.register("department")}
-                  placeholder="e.g. Computer Science"
-                  data-testid="input-profile-department"
-                />
+                <Input id="profile-department" {...form.register("department")} placeholder="e.g. Computer Science" data-testid="input-profile-department" />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="profile-phone">Phone</Label>
-                <Input
-                  id="profile-phone"
-                  {...form.register("phone")}
-                  placeholder="e.g. 555-0101"
-                  data-testid="input-profile-phone"
-                />
+                <Input id="profile-phone" {...form.register("phone")} placeholder="e.g. 555-0101" data-testid="input-profile-phone" />
               </div>
             </div>
 
             <div className="pt-2">
-              <Button
-                type="submit"
-                disabled={updateMutation.isPending}
-                data-testid="button-save-profile"
-              >
+              <Button type="submit" disabled={updateMutation.isPending} data-testid="button-save-profile">
                 {updateMutation.isPending ? (
                   <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
                 ) : "Save changes"}
@@ -172,7 +139,6 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Account details */}
       <Card>
         <CardHeader>
           <CardTitle className="font-serif text-base font-medium">Account Details</CardTitle>

@@ -14,13 +14,25 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
+} from "recharts";
 
 const ACTION_COLORS: Record<string, string> = {
   BORROWED: "bg-blue-100 text-blue-700",
   RETURNED: "bg-green-100 text-green-700",
   RENEWED: "bg-amber-100 text-amber-700",
   OVERDUE: "bg-red-100 text-red-700",
+  OVERDUE_FLAGGED: "bg-red-100 text-red-700",
 };
+
+const CHART_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(var(--primary) / 0.85)",
+  "hsl(var(--primary) / 0.70)",
+  "hsl(var(--primary) / 0.55)",
+  "hsl(var(--primary) / 0.40)",
+];
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -55,6 +67,11 @@ export default function DashboardPage() {
         { label: "Total in Catalog", value: summary?.totalBooks, icon: TrendingUp, color: "text-muted-foreground" },
       ];
 
+  const chartData = (popularBooks?.data ?? []).map(item => ({
+    title: item.book?.title ? (item.book.title.length > 20 ? item.book.title.slice(0, 18) + "…" : item.book.title) : "Unknown",
+    count: item.borrowCount,
+  }));
+
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-8">
       <div>
@@ -88,6 +105,68 @@ export default function DashboardPage() {
         })}
       </div>
 
+      {/* Borrowing chart — staff only */}
+      {isStaff && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="font-serif text-base font-medium flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-primary" />
+              Most Borrowed Books
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {popularLoading ? (
+              <Skeleton className="h-48 w-full" />
+            ) : chartData.length === 0 ? (
+              <div className="h-48 flex items-center justify-center">
+                <p className="text-sm text-muted-foreground">No borrowing data yet</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart
+                  data={chartData}
+                  layout="vertical"
+                  margin={{ top: 4, right: 24, bottom: 4, left: 8 }}
+                >
+                  <XAxis
+                    type="number"
+                    allowDecimals={false}
+                    tick={{ fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="title"
+                    width={140}
+                    tick={{ fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "hsl(var(--muted))" }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      return (
+                        <div className="bg-popover border border-border rounded-md px-3 py-2 shadow-md text-xs">
+                          <p className="font-medium">{payload[0].payload.title}</p>
+                          <p className="text-muted-foreground">{payload[0].value} borrow{payload[0].value === 1 ? "" : "s"}</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={28}>
+                    {chartData.map((_, i) => (
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Popular books */}
         <Card>
@@ -106,7 +185,7 @@ export default function DashboardPage() {
               </Link>
             </div>
           </CardHeader>
-          <CardContent className="pt-0 space-y-2">
+          <CardContent className="pt-0 space-y-1">
             {popularLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 py-2">
@@ -120,8 +199,8 @@ export default function DashboardPage() {
             ) : popularBooks?.data?.length ? (
               popularBooks.data.map((item, i) => (
                 <Link
-                  key={item.book.id}
-                  href={`/catalog/${item.book.id}`}
+                  key={item.book?.id ?? i}
+                  href={`/catalog/${item.book?.id}`}
                   className="flex items-center gap-3 py-2 rounded-md hover:bg-accent px-2 -mx-2 transition-colors"
                   data-testid={`popular-book-${i}`}
                 >
@@ -129,11 +208,11 @@ export default function DashboardPage() {
                     {i + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.book.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">{item.book.author}</p>
+                    <p className="text-sm font-medium truncate">{item.book?.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{item.book?.author}</p>
                   </div>
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {item.borrowCount}x
+                    {item.borrowCount}×
                   </span>
                 </Link>
               ))
@@ -143,7 +222,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Recent activity (staff) / status (student/faculty) */}
+        {/* Recent activity (staff) / my loans status (student/faculty) */}
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -162,7 +241,7 @@ export default function DashboardPage() {
               )}
             </div>
           </CardHeader>
-          <CardContent className="pt-0 space-y-2">
+          <CardContent className="pt-0 space-y-1">
             {isStaff ? (
               activityLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
@@ -177,14 +256,14 @@ export default function DashboardPage() {
               ) : recentActivity?.data?.length ? (
                 recentActivity.data.slice(0, 8).map((item, i) => (
                   <div key={i} className="flex items-start gap-3 py-1.5" data-testid={`activity-item-${i}`}>
-                    <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap", ACTION_COLORS[item.action])}>
+                    <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap flex-shrink-0 mt-0.5", ACTION_COLORS[item.action] ?? "bg-muted text-muted-foreground")}>
                       {item.action}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{item.loan.book?.title}</p>
-                      <p className="text-xs text-muted-foreground">{item.loan.user?.name}</p>
+                      <p className="text-xs font-medium truncate">{item.loan?.book?.title ?? "Unknown book"}</p>
+                      <p className="text-xs text-muted-foreground">{item.loan?.user?.name ?? "Unknown user"}</p>
                     </div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
                       {format(parseISO(item.timestamp), "MMM d")}
                     </span>
                   </div>
@@ -197,10 +276,7 @@ export default function DashboardPage() {
                 <div className="py-6 text-center">
                   <BookMarked className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">No active loans</p>
-                  <Link
-                    href="/catalog"
-                    className="text-xs text-primary hover:underline mt-1 inline-block"
-                  >
+                  <Link href="/catalog" className="text-xs text-primary hover:underline mt-1 inline-block">
                     Browse the catalog
                   </Link>
                 </div>
@@ -210,7 +286,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/20">
                       <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />
                       <p className="text-sm text-destructive font-medium">
-                        You have {summary?.myOverdueLoans} overdue {summary?.myOverdueLoans === 1 ? "loan" : "loans"}
+                        {summary?.myOverdueLoans} overdue {summary?.myOverdueLoans === 1 ? "loan" : "loans"}
                       </p>
                     </div>
                   )}
